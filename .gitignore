@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+bin/
+*.o
+
+# Logs and runtime artifacts
+nohup.out
+*.log
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary and swap files
+*.swp
+*.swo
+*~
+*.bak
+*.bak*
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.kate-swp
+
+.qtcreator/

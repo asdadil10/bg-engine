@@ -1,0 +1,53 @@
+Here is the revised, official project proposal for the "NerveCenter" engine, entirely re-architected for the native KDE Plasma 6 environment.
+
+Since you already know C++, this route actually leans perfectly into your existing skill set. You won't need to learn Rust; you will be using your C++ knowledge to write the backend brain of the wallpaper, while QML handles the beautiful frontend.
+
+Project Proposal: Project "NerveCenter" (Native KDE Architecture)
+Objective: To engineer a native, hardware-accelerated KDE Plasma 6 Wallpaper Plugin that transforms the desktop background into a live, interactive command center. By building within the KDE ecosystem, the engine will achieve zero-overhead background execution, native Wayland compliance, and seamless multi-monitor support without relying on window-manager hacks.
+
+1. The Native Architectural Stack
+Instead of forcing a web browser to act like a wallpaper, we are building a first-class citizen of the operating system.
+
+The UI Framework: QML (Qt Modeling Language). A lightning-fast, declarative UI language that natively powers the entire KDE Plasma desktop.
+
+The Backend Logic: C++ (Qt6). Used to write custom QML modules that handle heavy lifting (like spawning raw shell processes or reading hardware files) and expose them securely to the UI.
+
+The Environment: KDE Frameworks 6 (KF6) and KWin (the Wayland compositor).
+
+2. The "Native Advantage" (Why this is better than Tauri)
+Wayland Compliance: Zero hacks required. KWin inherently understands that your QML file is a wallpaper and handles all the security and monitor-spanning natively.
+
+Smart Rendering: KDE automatically pauses rendering your wallpaper when an application is maximized over it, meaning your engine uses 0% CPU/GPU while you are gaming or working in full screen.
+
+GPU Acceleration: QML uses Vulkan/OpenGL natively. We can write actual GLSL fragment shaders (for that retro CRT glow) directly into the UI code with zero performance penalty.
+
+3. Phased Implementation Roadmap
+Phase 1: The Native Canvas (Currently Complete)
+Goal: Establish the plugin structure and get a QML canvas rendering on the desktop.
+
+Tasks: Build the metadata.json to register the plugin with KDE. Create the main.qml file to act as the root UI.
+
+Status: You have essentially just completed this step. The engine is recognized by the OS.
+
+Phase 2: The System Nervous System (QML Data Binding)
+Goal: Display live system diagnostics (CPU, RAM, Network) without external scripts.
+
+The Strategy: KDE Plasma has built-in data engines. We don't even need C++ for this part yet. We will use Plasma's native SystemMonitor QML modules to pull live hardware data directly from the kernel.
+
+The UI: Build modular QML components (like CpuGauge.qml or RamBar.qml) and use QML's animation framework to make the data transitions smooth and sleek.
+
+Phase 3: The C++ Brain (Terminal & Process Execution)
+Goal: Create an interactive terminal and scratchpad that can talk to the underlying Linux system.
+
+The Challenge: For security, QML cannot arbitrarily execute bash scripts or open pseudoterminals on its own.
+
+The Solution (Your C++ Time to Shine): You will write a C++ class using QProcess (part of the Qt framework). This C++ code will spawn an invisible Bash/Zsh shell, read the inputs/outputs, and expose that stream to your QML frontend.
+
+The Interface: We will integrate QMLTermWidget (a popular open-source QML terminal emulator) into your background, feeding it the data from your C++ backend.
+
+Phase 4: Shaders & Cohesion (The Visual Magic)
+Goal: Apply the hacker aesthetic seamlessly across the entire canvas.
+
+GLSL Integration: Instead of CSS hacks, we will use QtQuick's ShaderEffect component. You can drop a real GLSL fragment shader over the entire root Item in QML to curve the screen, add chromatic aberration, and create a highly realistic phosphor glow.
+
+D-Bus Integration: We can use QML to listen to KDE's system-wide D-Bus signals. If your system changes to "Dark Mode," the wallpaper instantly shifts its color palette to match.

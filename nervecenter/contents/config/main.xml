@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+
+  <group name="General">
+    <entry name="BackgroundColor" type="Color">
+      <label>Base background color</label>
+      <default>#08090d</default>
+    </entry>
+    <entry name="AccentColor" type="Color">
+      <label>Primary accent color</label>
+      <default>#00f0ff</default>
+    </entry>
+    <entry name="HighlightColor" type="Color">
+      <label>Secondary highlight color</label>
+      <default>#ff007f</default>
+    </entry>
+    <entry name="GridOpacity" type="Double">
+      <label>Background grid opacity</label>
+      <default>0.0</default>
+    </entry>
+    <entry name="BackgroundImage" type="String">
+      <label>Optional background image path</label>
+      <default></default>
+    </entry>
+    <entry name="BackgroundImageOpacity" type="Double">
+      <label>Background image opacity</label>
+      <default>0.15</default>
+    </entry>
+    <entry name="HudOpacity" type="Double">
+      <label>Overall HUD panel opacity</label>
+      <default>1.0</default>
+    </entry>
+    <entry name="PanelStyle" type="Int">
+      <label>Backdrop panel styling (0=Wireframe, 1=Glassmorphic, 2=Flat, 3=Tactical, 4=Void, 5=RetroCRT, 6=Neumorphic)</label>
+      <default>0</default>
+    </entry>
+    <entry name="EffectHologram" type="Bool">
+      <label>Hologram edge neon borders overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectVignette" type="Bool">
+      <label>Top/bottom depth vignette gradient overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectCircuit" type="Bool">
+      <label>Circuit board PCB trace matrix overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectPrismBlur" type="Bool">
+      <label>Optical chromatic dispersion frosted glass blur</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectScanlines" type="Bool">
+      <label>Static CRT interlace raster scanline overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectAscii" type="Bool">
+      <label>Static cached zero-GPU ASCII matrix quantization shader</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectLidarSobel" type="Bool">
+      <label>LiDAR Sobel vector edge contour overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectThermalFlir" type="Bool">
+      <label>Thermal FLIR Ironbow reconnaissance overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectHalftone" type="Bool">
+      <label>45-degree halftone dot screen overlay</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectDuotone" type="Bool">
+      <label>Duotone atmospheric palette harmonizer</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectDitherFrost" type="Bool">
+      <label>Sandblasted Poisson dither frosted acrylic blur</label>
+      <default>false</default>
+    </entry>
+    <entry name="EffectsStackJson" type="String">
+      <label>JSON array of dynamic activation stack order</label>
+      <default>[]</default>
+    </entry>
+    <entry name="PanelsLayoutJson" type="String">
+      <label>JSON string of panel coordinates</label>
+      <default>{}</default>
+    </entry>
+    <entry name="EditMode" type="Bool">
+      <label>Global edit mode toggle</label>
+      <default>false</default>
+    </entry>
+    <entry name="ShortcutIconPadding" type="Int">
+      <label>Padding between shortcut icons</label>
+      <default>16</default>
+    </entry>
+    <entry name="ShortcutIconSize" type="Int">
+      <label>Size of shortcut icons</label>
+      <default>48</default>
+    </entry>
+    <entry name="FontFamily" type="String">
+      <label>Global font family</label>
+      <default>Hack</default>
+    </entry>
+    <entry name="FontScale" type="Double">
+      <label>Global font scale factor</label>
+      <default>1.0</default>
+    </entry>
+    <entry name="ShortcutsJson" type="String">
+      <label>JSON data for shortcuts</label>
+      <default>[]</default>
+    </entry>
+    <entry name="NotesText" type="String">
+      <label>Persistent scratchpad neural log contents</label>
+      <default>// NEURAL LINK LOGS //&#10;[SECURE RECORD] Enter custom logs here...</default>
+    </entry>
+    <entry name="BackgroundFillMode" type="Int">
+      <label>Background image fill mode (0=Crop, 1=Fit, 2=Stretch)</label>
+      <default>0</default>
+    </entry>
+    <entry name="ShowMainTerminal" type="Bool">
+      <label>Show main terminal panel</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowLeftMediaPanel" type="Bool">
+      <label>Show media player HUD</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowLeftSensorPanel" type="Bool">
+      <label>Show hardware telemetry diagnostics</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowRightNetworkPanel" type="Bool">
+      <label>Show network telemetry throughput graph</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowRightNotesPanel" type="Bool">
+      <label>Show persistent neural log scratchpad</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowRightControlsPanel" type="Bool">
+      <label>Show quick deck controls</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowLeftBookmarkBar" type="Bool">
+      <label>Show quick launch application dock</label>
+      <default>true</default>
+    </entry>
+    <entry name="ShowTodoPanel" type="Bool">
+      <label>Show cybernetic directives task panel</label>
+      <default>false</default>
+    </entry>
+    <entry name="ShowGitGridPanel" type="Bool">
+      <label>Show git commit activity matrix panel</label>
+      <default>false</default>
+    </entry>
+  </group>
+
+</kcfg>

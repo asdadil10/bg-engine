@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "asdadil10@users.noreply.github.com",
+                "Name": "asdadil10"
+            }
+        ],
+        "Category": "",
+        "Description": "A live, interactive command center wallpaper that transforms your desktop into a hacker-style system dashboard with real-time diagnostics, terminal access, and GPU-accelerated visual effects.",
+        "Icon": "preferences-desktop-wallpaper",
+        "Id": "org.kde.nervecenter",
+        "License": "GPLv2+",
+        "Name": "NerveCenter",
+        "Website": "https://github.com/asdadil10/bg-engine"
+    },
+    "X-KDE-ParentApp": "org.kde.plasmashell"
+}

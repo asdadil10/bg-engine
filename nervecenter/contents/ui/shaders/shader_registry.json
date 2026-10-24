@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "max_layers": 8,
+
+  "shaders": [
+
+    {
+      "id": "prism_blur",
+      "name": "Prism Glass Blur",
+      "category": "Blur & Optics",
+      "tier": "global",
+      "file": "prism_blur.frag.qsb",
+      "passes": [
+        { "name": "chromatic_blur", "frag": "prism_blur.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Blur Radius",   "min": 4.0,  "max": 32.0, "default": 18.0 },
+        { "slot": "p0.y", "name": "Dispersion",     "min": 0.5,  "max": 8.0,  "default": 4.5  },
+        { "slot": "c0",   "name": "Glass Tint",     "type": "color", "default": "#00f0ff"     }
+      ]
+    },
+
+    {
+      "id": "anamorphic_streak",
+      "name": "Anamorphic Lens Streak",
+      "category": "Blur & Optics",
+      "tier": "global",
+      "file": "anamorphic_streak.frag.qsb",
+      "passes": [
+        { "name": "luma_threshold", "frag": "streak_thresh.frag.qsb", "downsample": 4 },
+        { "name": "h_blur",         "frag": "streak_blur.frag.qsb",   "downsample": 1 },
+        { "name": "composite",      "frag": "streak_comp.frag.qsb",   "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Threshold",    "min": 0.5,  "max": 0.98, "default": 0.82 },
+        { "slot": "p0.y", "name": "Spread (px)",  "min": 4.0,  "max": 64.0, "default": 24.0 },
+        { "slot": "p0.z", "name": "LDR Gain",     "min": 1.0,  "max": 5.0,  "default": 2.5  },
+        { "slot": "c0",   "name": "Streak Tint",  "type": "color", "default": "#00f0ff"     }
+      ]
+    },
+
+    {
+      "id": "dither_frost",
+      "name": "Sandblasted Dither Blur",
+      "category": "Blur & Optics",
+      "tier": "global",
+      "file": "dither_frost.frag.qsb",
+      "passes": [
+        { "name": "poisson_blur", "frag": "dither_frost.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Blur Radius",      "min": 2.0,  "max": 24.0, "default": 8.0  },
+        { "slot": "p0.y", "name": "Grain Intensity",  "min": 0.0,  "max": 1.0,  "default": 0.4  }
+      ]
+    },
+
+    {
+      "id": "duotone",
+      "name": "Duotone Atmosphere",
+      "category": "Blur & Optics",
+      "tier": "global",
+      "file": "duotone.frag.qsb",
+      "passes": [
+        { "name": "lut_remap", "frag": "duotone.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Contrast",     "min": 0.5, "max": 2.0, "default": 1.0 },
+        { "slot": "c0",   "name": "Void Color",   "type": "color", "default": "#0a0c12"   },
+        { "slot": "c1",   "name": "Accent Color", "type": "color", "default": "#00f0ff"   },
+        { "slot": "c2",   "name": "High Color",   "type": "color", "default": "#ff007f"   }
+      ]
+    },
+
+    {
+      "id": "lidar_sobel",
+      "name": "LiDAR Sobel Wireframe",
+      "category": "Telemetry & Tactical",
+      "tier": "global",
+      "file": "lidar_sobel.frag.qsb",
+      "passes": [
+        { "name": "edge_detect", "frag": "lidar_sobel.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Pre-Blur",      "min": 0.0,  "max": 3.0,  "default": 1.5  },
+        { "slot": "p0.y", "name": "Threshold",     "min": 0.05, "max": 0.4,  "default": 0.18 },
+        { "slot": "p0.z", "name": "Edge Thickness","min": 1.0,  "max": 4.0,  "default": 1.0  },
+        { "slot": "p0.w", "name": "BG Darken",     "min": 0.0,  "max": 0.85, "default": 0.5  },
+        { "slot": "c0",   "name": "Edge Color",    "type": "color", "default": "#00f0ff"     }
+      ]
+    },
+
+    {
+      "id": "thermal_flir",
+      "name": "Thermal FLIR Recon",
+      "category": "Telemetry & Tactical",
+      "tier": "global",
+      "file": "thermal_flir.frag.qsb",
+      "passes": [
+        { "name": "lut_remap", "frag": "thermal_flir.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Gain",        "min": 0.5, "max": 3.0, "default": 1.0 },
+        { "slot": "p0.y", "name": "Invert",      "min": 0.0, "max": 1.0, "default": 0.0 }
+      ]
+    },
+
+    {
+      "id": "halftone",
+      "name": "Halftone Screen",
+      "category": "Telemetry & Tactical",
+      "tier": "global",
+      "file": "halftone.frag.qsb",
+      "passes": [
+        { "name": "dot_raster", "frag": "halftone.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Cell Size (px)", "min": 4.0,  "max": 20.0, "default": 8.0  },
+        { "slot": "p0.y", "name": "BG Darken",      "min": 0.0,  "max": 0.9,  "default": 0.6  },
+        { "slot": "c0",   "name": "Dot Color",      "type": "color", "default": "#00f0ff"     }
+      ]
+    },
+
+    {
+      "id": "tiltshift",
+      "name": "Tilt-Shift Bokeh",
+      "category": "Blur & Optics",
+      "tier": "panel_local",
+      "file": "tiltshift.frag.qsb",
+      "passes": [
+        { "name": "focus_blur", "frag": "tiltshift.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "p0.x", "name": "Inner Radius",  "min": 0.0,  "max": 0.8,  "default": 0.25 },
+        { "slot": "p0.y", "name": "Outer Radius",  "min": 0.1,  "max": 1.0,  "default": 0.6  },
+        { "slot": "p0.z", "name": "Max Blur",      "min": 2.0,  "max": 20.0, "default": 8.0  },
+        { "slot": "p0.w", "name": "Bright Boost",  "min": 1.0,  "max": 4.0,  "default": 1.5  }
+      ]
+    },
+
+    {
+      "id": "ascii",
+      "name": "Technical ASCII Art",
+      "category": "Telemetry & Tactical",
+      "tier": "global",
+      "file": "ascii.frag.qsb",
+      "passes": [
+        { "name": "ascii_quantize", "frag": "ascii.frag.qsb", "downsample": 1 }
+      ],
+      "params": [
+        { "slot": "c0", "name": "Density Color",  "type": "color", "default": "#00f0ff" },
+        { "slot": "c1", "name": "Contour Color",  "type": "color", "default": "#ff007f" }
+      ]
+    },
+
+    {
+      "id": "hologram",
+      "name": "Hologram Edges",
+      "category": "Optics & CRT",
+      "tier": "panel_local",
+      "file": "canvas",
+      "passes": [],
+      "params": []
+    },
+
+    {
+      "id": "vignette",
+      "name": "Vignette Depth",
+      "category": "Optics & CRT",
+      "tier": "panel_local",
+      "file": "canvas",
+      "passes": [],
+      "params": []
+    },
+
+    {
+      "id": "circuit",
+      "name": "Circuit Board",
+      "category": "Optics & CRT",
+      "tier": "panel_local",
+      "file": "canvas",
+      "passes": [],
+      "params": []
+    },
+
+    {
+      "id": "scanlines",
+      "name": "Interlace Scanlines",
+      "category": "Optics & CRT",
+      "tier": "panel_local",
+      "file": "canvas",
+      "passes": [],
+      "params": []
+    }
+  ]
+}
