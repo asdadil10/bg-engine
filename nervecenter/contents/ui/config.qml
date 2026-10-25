@@ -35,7 +35,6 @@ ColumnLayout {
     property alias cfg_EffectAscii:            effectAsciiSwitch.checked
     property alias cfg_EffectLidarSobel:       effectLidarSobelSwitch.checked
     property alias cfg_EffectThermalFlir:      effectThermalFlirSwitch.checked
-    property alias cfg_EffectHalftone:         effectHalftoneSwitch.checked
     property alias cfg_EffectDuotone:          effectDuotoneSwitch.checked
     property alias cfg_EffectDitherFrost:      effectDitherFrostSwitch.checked
     property alias cfg_EffectsStackJson:       effectsStackJsonField.text
@@ -102,8 +101,7 @@ ColumnLayout {
 
     readonly property var effectKeyOrder: [
         "prism_blur", "hologram", "vignette", "circuit", "scanlines",
-        "ascii", "lidar_sobel", "thermal_flir", "halftone", "duotone",
-        "dither_frost"
+        "ascii", "lidar_sobel", "thermal_flir", "duotone", "dither_frost"
     ]
 
     function effectSwitchByKey(key) {
@@ -116,7 +114,6 @@ ColumnLayout {
             case "ascii":        return effectAsciiSwitch
             case "lidar_sobel":  return effectLidarSobelSwitch
             case "thermal_flir": return effectThermalFlirSwitch
-            case "halftone":     return effectHalftoneSwitch
             case "duotone":      return effectDuotoneSwitch
             case "dither_frost": return effectDitherFrostSwitch
         }
@@ -131,6 +128,16 @@ ColumnLayout {
             parsed = []
         }
         if (!Array.isArray(parsed)) parsed = []
+
+        // Drop unknown/duplicate keys (for example a legacy "halftone"
+        // entry) while preserving the remaining activation order.
+        var filtered = []
+        for (var i = 0; i < parsed.length; i++) {
+            var key = parsed[i]
+            if (effectKeyOrder.indexOf(key) >= 0 && filtered.indexOf(key) < 0)
+                filtered.push(key)
+        }
+        parsed = filtered
 
         // main.qml repairs a legacy boolean-only config into EffectsStackJson
         // at startup, so an empty stack here legitimately means "no effects".
@@ -589,14 +596,6 @@ ColumnLayout {
                 text: "FLIR Ironbow thermal reconnaissance palette"
                 checked: false
                 onClicked: root.setEffectEnabled("thermal_flir", checked)
-            }
-
-            QQC2.Switch {
-                id: effectHalftoneSwitch
-                Kirigami.FormData.label: "Halftone Dot Screen:"
-                text: "Pixel-space aspect-corrected halftone dot screen"
-                checked: false
-                onClicked: root.setEffectEnabled("halftone", checked)
             }
 
             QQC2.Switch {

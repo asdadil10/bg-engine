@@ -105,22 +105,6 @@
     },
 
     {
-      "id": "halftone",
-      "name": "Halftone Screen",
-      "category": "Telemetry & Tactical",
-      "tier": "global",
-      "file": "halftone.frag.qsb",
-      "passes": [
-        { "name": "dot_raster", "frag": "halftone.frag.qsb", "downsample": 1 }
-      ],
-      "params": [
-        { "slot": "p0.x", "name": "Cell Size (px)", "min": 4.0,  "max": 20.0, "default": 8.0  },
-        { "slot": "p0.y", "name": "BG Darken",      "min": 0.0,  "max": 0.9,  "default": 0.6  },
-        { "slot": "c0",   "name": "Dot Color",      "type": "color", "default": "#00f0ff"     }
-      ]
-    },
-
-    {
       "id": "tiltshift",
       "name": "Tilt-Shift Bokeh",
       "category": "Blur & Optics",

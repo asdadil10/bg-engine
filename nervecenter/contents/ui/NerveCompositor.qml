@@ -1,6 +1,14 @@
 /*
  * NerveCompositor.qml  —  NerveCenter Multi-Pass Ping-Pong Shader Compositor (v3)
  *
+ * STATUS: NOT WIRED INTO THE SHIPPED WALLPAPER.
+ *   This is a reference implementation for a future chained pipeline. No QML
+ *   file instantiates it, and `shader_registry.json` is not loaded at runtime.
+ *   The live wallpaper uses ordered backdrop overlays instead: each effect
+ *   samples the original wallpaper and alpha-composites in activation order
+ *   (see README.md → "Rendering model"). Do not describe the shipped path as
+ *   a multi-pass compositor.
+ *
  * Architecture:
  *   - Two distinct blend effects (blendEffectA and blendEffectB) eliminating recursive FBO warnings.
  *   - Base source in RGBA8; intermediate ping-pong buffers in RGBA16F to prevent inter-pass banding.
@@ -366,9 +374,6 @@ Item {
             currentLayer.shaderSource = "shaders/thermal_flir.frag.qsb";
             currentLayer.lutTexture = flirLutImage;
             if (!def.p0) currentLayer.p0 = Qt.vector4d(1.0, 0.0, 0.0, 0.0);
-        } else if (type === "halftone") {
-            currentLayer.shaderSource = "shaders/halftone.frag.qsb";
-            if (!def.p0) currentLayer.p0 = Qt.vector4d(8.0, 0.6, 0.0, 0.0);
         } else if (type === "ascii") {
             currentLayer.shaderSource = "shaders/ascii.frag.qsb";
             currentLayer.atlasTexture = asciiAtlasImage;

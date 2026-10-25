@@ -74,10 +74,6 @@
       <label>Thermal FLIR Ironbow reconnaissance overlay</label>
       <default>false</default>
     </entry>
-    <entry name="EffectHalftone" type="Bool">
-      <label>45-degree halftone dot screen overlay</label>
-      <default>false</default>
-    </entry>
     <entry name="EffectDuotone" type="Bool">
       <label>Duotone atmospheric palette harmonizer</label>
       <default>false</default>

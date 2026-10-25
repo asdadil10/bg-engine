@@ -72,9 +72,23 @@ WallpaperItem {
     function allEffectKeys() {
         return [
             "prism_blur", "hologram", "vignette", "circuit", "scanlines",
-            "ascii", "lidar_sobel", "thermal_flir", "halftone", "duotone",
-            "dither_frost"
+            "ascii", "lidar_sobel", "thermal_flir", "duotone", "dither_frost"
         ];
+    }
+
+    // Drop unknown/duplicate keys from a stack (for example a legacy
+    // "halftone" entry) while preserving the remaining activation order.
+    function sanitizeEffectStack(stack) {
+        var out = [];
+        var keys = allEffectKeys();
+        if (!Array.isArray(stack)) return out;
+        for (var i = 0; i < stack.length; i++) {
+            var key = stack[i];
+            if (keys.indexOf(key) >= 0 && out.indexOf(key) < 0) {
+                out.push(key);
+            }
+        }
+        return out;
     }
 
     function effectConfigKey(key) {
@@ -87,7 +101,6 @@ WallpaperItem {
             case "ascii":        return "EffectAscii";
             case "lidar_sobel":  return "EffectLidarSobel";
             case "thermal_flir": return "EffectThermalFlir";
-            case "halftone":     return "EffectHalftone";
             case "duotone":      return "EffectDuotone";
             case "dither_frost": return "EffectDitherFrost";
         }
@@ -117,7 +130,6 @@ WallpaperItem {
         if (layoutSettings.effectAscii)       out.push("ascii");
         if (layoutSettings.effectLidarSobel)  out.push("lidar_sobel");
         if (layoutSettings.effectThermalFlir) out.push("thermal_flir");
-        if (layoutSettings.effectHalftone)    out.push("halftone");
         if (layoutSettings.effectDuotone)     out.push("duotone");
         if (layoutSettings.effectDitherFrost) out.push("dither_frost");
         return out;
@@ -293,7 +305,6 @@ WallpaperItem {
         property bool effectAscii: false
         property bool effectLidarSobel: false
         property bool effectThermalFlir: false
-        property bool effectHalftone: false
         property bool effectDuotone: false
         property bool effectDitherFrost: false
         property string effectsStackJson: "[]"
@@ -337,7 +348,6 @@ WallpaperItem {
             if (key === "EffectAscii") { root.syncEffectFromConfig("ascii", value) }
             if (key === "EffectLidarSobel") { root.syncEffectFromConfig("lidar_sobel", value) }
             if (key === "EffectThermalFlir") { root.syncEffectFromConfig("thermal_flir", value) }
-            if (key === "EffectHalftone") { root.syncEffectFromConfig("halftone", value) }
             if (key === "EffectDuotone") { root.syncEffectFromConfig("duotone", value) }
             if (key === "EffectDitherFrost") { root.syncEffectFromConfig("dither_frost", value) }
             if (key === "EffectsStackJson") {
@@ -345,7 +355,7 @@ WallpaperItem {
                     try {
                         var s = JSON.parse(value || "[]");
                         if (Array.isArray(s)) {
-                            root.activeEffectsStack = s;
+                            root.activeEffectsStack = root.sanitizeEffectStack(s);
                             // Normalize the boolean entries to match the stack.
                             root.syncEffectsToConfig();
                         }
@@ -468,7 +478,7 @@ WallpaperItem {
                 migratedStack = root.stackFromLocalBooleans();
             }
 
-            root.activeEffectsStack = migratedStack;
+            root.activeEffectsStack = root.sanitizeEffectStack(migratedStack);
             // Normalize KConfig first; only then record that migration is done.
             root.syncEffectsToConfig();
             if (root.configuration.StyleMigrated !== undefined) {
@@ -491,7 +501,7 @@ WallpaperItem {
             if (savedStack.length === 0) {
                 savedStack = root.stackFromConfigBooleans();
             }
-            root.activeEffectsStack = savedStack;
+            root.activeEffectsStack = root.sanitizeEffectStack(savedStack);
             root.syncEffectsToConfig();
         }
         root.effectsReady = true;
@@ -919,7 +929,7 @@ WallpaperItem {
                                     }
                                 }
 
-                                // Effect toggle items (multi-select, dynamically stacked in activation order)
+                                // Effect toggle items (multi-select, painted in activation order as backdrop overlays)
                                 component EffectItem: MenuItem {
                                     id: ei
                                     property string effectName
@@ -972,7 +982,7 @@ WallpaperItem {
                                     }
                                 }
 
-                                // ── Stackable Effects (Dynamic Layer Stacking / 0% GPU) ──
+                                // ── Backdrop Overlays (ordered; each samples the wallpaper) ──
                                 EffectItem {
                                     effectName: "+ PRISM_FROST_BLUR"
                                     effectKey: "prism_blur"
@@ -1004,10 +1014,6 @@ WallpaperItem {
                                 EffectItem {
                                     effectName: "+ THERMAL_FLIR_RECON"
                                     effectKey: "thermal_flir"
-                                }
-                                EffectItem {
-                                    effectName: "+ HALFTONE_DOT_SCREEN"
-                                    effectKey: "halftone"
                                 }
                                 EffectItem {
                                     effectName: "+ DUOTONE_ATMOSPHERE"

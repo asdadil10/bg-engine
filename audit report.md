@@ -8,10 +8,10 @@
 
 ## Verdict
 
-- **Layering is real, but shallow.** The 11 micro-effects are ordered by one array and assigned `z = index + 5`; they alpha-composite in activation order. But they are **not a render chain** — each effect samples the original wallpaper independently. Base styles are outside the stack and pinned above it. The only true ping-pong compositor in the repo (`NerveCompositor.qml`) is **never instantiated**.
+- **Layering is real, but shallow.** The micro-effects are ordered by one array and assigned `z = index + 5`; they alpha-composite in activation order. But they are **not a render chain** — each effect samples the original wallpaper independently. Base styles are outside the stack and pinned above it. The only true ping-pong compositor in the repo (`NerveCompositor.qml`) is **never instantiated**. C1 resolved this by documenting the shipped model as ordered backdrop overlays and relabelling the compositor as unused reference code.
 - **Persistence is split-brain.** Base style is effectively local-settings-authoritative; the effect stack is KConfig-authoritative. The two stores already disagree on this machine, so a reboot can produce a hybrid state that was never selected.
 
-> **Status (2026-10-25):** the P0 persistence findings below are fixed and verified. KConfig is now the single source of truth for both base style and the effect stack, after a one-time migration guarded by `StyleMigrated`. Sections 1–3 describe the **pre-fix** code and are kept as the audit record; §5 tracks each fix and its verification.
+> **Status (2026-10-25):** the P0 persistence findings below are fixed and verified. KConfig is now the single source of truth for both base style and the effect stack, after a one-time migration guarded by `StyleMigrated`. Sections 1–3 describe the **pre-fix** code and are kept as the audit record; §5 tracks each fix and its verification. The halftone effect was subsequently removed end-to-end (schema, both UIs, runtime, registry, shaders, tests), leaving **10** shipped effects; legacy `"halftone"` entries in saved stacks are filtered out on load.
 
 ---
 
@@ -20,7 +20,7 @@
 | Axis | Selection | Storage key | Applied by |
 |---|---|---|---|
 | **Base style** | Single-select, `0–6` | `panelStyle` | `NerveFrame.qml:12`, `44–78` |
-| **Micro-effects** | Multi-select, 11 effects | `activeEffectsStack` + `effectsStackJson` | `main.qml:52`, `NerveFrame.qml:28–41` |
+| **Micro-effects** | Multi-select, 11 effects at audit time (10 after halftone removal) | `activeEffectsStack` + `effectsStackJson` | `main.qml:52`, `NerveFrame.qml:28–41` |
 
 Base styles change the root `Rectangle` fill, radius, and border, plus hardcoded decoration layers:
 
@@ -232,8 +232,8 @@ Interpretation:
 ### A. Persistence correctness (P0)
 
 - [x] **A1. Make KConfig the single source of truth for base style.** `main.qml` now exposes `readonly property int panelStyle` bound to `root.configuration.PanelStyle`; `setPanelStyle()` writes KConfig directly. Acceptance: deleting local settings restores the KConfig style.
-- [x] **A2. Make effect persistence write-through.** `syncEffectFromConfig()` now updates the in-memory stack and calls `syncEffectsToConfig()`, which writes `EffectsStackJson` **and** all 11 `Effect*` booleans under a re-entrancy guard. Acceptance: a config-dialog effect toggle updates the stack immediately.
-- [x] **A3. Persist all 11 effects from the config dialog.** Added `cfg_EffectLidarSobel`, `cfg_EffectThermalFlir`, `cfg_EffectHalftone`, `cfg_EffectDuotone`, `cfg_EffectDitherFrost`, and `cfg_EffectsStackJson` in `config.qml`, plus the five missing switches. Acceptance: every effect can be toggled from Plasma settings and survives a restart.
+- [x] **A2. Make effect persistence write-through.** `syncEffectFromConfig()` now updates the in-memory stack and calls `syncEffectsToConfig()`, which writes `EffectsStackJson` **and** every current `Effect*` boolean (10 after halftone removal) under a re-entrancy guard. Acceptance: a config-dialog effect toggle updates the stack immediately.
+- [x] **A3. Persist every effect from the config dialog.** Added `cfg_EffectLidarSobel`, `cfg_EffectThermalFlir`, `cfg_EffectDuotone`, `cfg_EffectDitherFrost`, and `cfg_EffectsStackJson` in `config.qml`, plus the missing switches. (`cfg_EffectHalftone` existed briefly and was removed with the effect.) Acceptance: every effect can be toggled from Plasma settings and survives a restart.
 - [x] **A4. Remove the KConfig-stack-over-local precedence ambiguity.** KConfig is authoritative after a one-time migration. Local style/effect mirrors are read only by the migration and are never used at runtime. Acceptance: mixed in-canvas + config-dialog edits no longer revert.
 - [x] **A5. Stop local overrides shadowing KConfig indefinitely.** Style and effect reads now come from `root.panelStyle` / `root.configuration.Effect*`; the local `Settings` mirrors are migration-only. Acceptance: KConfig changes are reflected even when local values are non-default.
 - [x] **A6. Scope local Settings per containment, or eliminate local style/effect storage.** Local style/effect storage is now legacy-only and ignored after the per-containment KConfig `StyleMigrated` flag is set; KConfig provides per-containment isolation. Acceptance: two containments/screens can hold different styles without cross-talk.
@@ -241,19 +241,19 @@ Interpretation:
 
 ### B. Schema and config UI consistency
 
-- [x] **B1. Add the missing effect aliases to `config.qml`.** All 11 `cfg_Effect*` aliases now exist.
-- [x] **B2. Add `cfg_EffectsStackJson` or replace the 11 switches with one ordered list editor.** A hidden `effectsStackJsonField` is bound to `cfg_EffectsStackJson`; toggling a switch preserves activation order (new effects append, disabled effects are removed).
+- [x] **B1. Add the missing effect aliases to `config.qml`.** All 10 current `cfg_Effect*` aliases exist (halftone's alias was removed with the effect).
+- [x] **B2. Add `cfg_EffectsStackJson` or replace the 10 switches with one ordered list editor.** A hidden `effectsStackJsonField` is bound to `cfg_EffectsStackJson`; toggling a switch preserves activation order (new effects append, disabled effects are removed). Unknown/duplicate keys — including legacy `"halftone"` — are filtered on load.
 - [x] **B3. Remove redundant per-effect booleans if the stack JSON is the source of truth**, or write both consistently. Both are written together by `syncEffectsToConfig()`, so `EffectHologram=true` can no longer coexist with a stack that excludes `hologram`.
 - [x] **B4. Migrate and remove legacy local keys** (`effectHex`, `effectGraticule`, `showRightAIPanel`, `[Presets]`, `[QuoteOfDay]`). Acceptance: local settings contain only the current schema. *(`[QuoteOfDay]` is current, not legacy — `main.qml` reads it for the daily quote. The three orphaned `[Layout]` keys and the `[Presets]` group were removed by `scripts/cleanup-legacy-settings.py`, which edits the shared file as text instead of re-serializing it through KConfig tools. The script runs from `install.sh` and is idempotent. The `panelStyle`/`effect*`/`effectsStackJson` mirrors are deliberately retained: the one-time migration still reads them for users upgrading from older versions.)*
-- [x] **B5. Update `main.xml` labels/defaults** if the schema changes, and keep `config.qml` aliases in lockstep. The schema already contained all 11 effects and `EffectsStackJson`; aliases are now in lockstep.
+- [x] **B5. Update `main.xml` labels/defaults** if the schema changes, and keep `config.qml` aliases in lockstep. The schema and aliases are in lockstep at 10 effects plus `EffectsStackJson`; `EffectHalftone` was removed from both.
 
 > **Implementation note:** On first run after this patch, `main.qml` runs a one-time migration guarded by the per-containment KConfig `StyleMigrated` flag (`config/main.xml`). It preserves the previously effective state (local base style + KConfig effect stack), writes the normalized result to KConfig, then ignores the local mirrors. This is the only point where local style/effect values are read.
 
 ### C. Layering and architecture
 
-- [ ] **C1. Decide the layering model.** Either wire `NerveCompositor.qml` into `NerveFrame` for true chained passes, or document the shipped model as "ordered backdrop overlays" and remove/relabel the unused compositor claims. Acceptance: docs and code agree on whether effects are chained.
+- [x] **C1. Decide the layering model.** Resolved with the low-risk option: the shipped model is documented as **ordered backdrop overlays** (`README.md` → "Rendering model", `MINIMAP.md`), and `NerveCompositor.qml` / `NerveShaderLayer.qml` are explicitly marked unused reference code. Each effect samples the original wallpaper crop and alpha-composites in activation order; there is no chained pass. Acceptance: docs and code agree on whether effects are chained. *(Verified: no QML file instantiates the compositor; docs and source headers now say so.)*
 - [ ] **C2. Replace hardcoded effect blocks with one ordered effect model** (`Repeater`/`Loader`) so z-order, visibility, and parameters come from a single list. Acceptance: adding an effect requires one model entry, not a new hand-written block.
-- [ ] **C3. Enforce a layer cap or update the registry.** Align `shader_registry.json` `max_layers` with the 11 exposed effects. Acceptance: the UI cannot exceed the declared cap.
+- [ ] **C3. Enforce a layer cap or update the registry.** Align `shader_registry.json` `max_layers` with the 10 exposed effects. Acceptance: the UI cannot exceed the declared cap.
 - [ ] **C4. Add occlusion culling or skip fully covered opaque layers.** Acceptance: enabling `dither_frost` above `duotone` does not run both full-panel passes.
 - [ ] **C5. Fix the circuit marker z collision** (`NerveFrame.qml:576`). Use a unique sub-layer offset or fold markers into the circuit item.
 - [ ] **C6. Fix Canvas repaint on theme color changes** for style 0 and style 3 (`NerveFrame.qml:309–310`, `629–630`). Acceptance: changing accent/highlight updates decorations immediately.
@@ -263,22 +263,24 @@ Interpretation:
 
 ### D. Documentation
 
-- [ ] **D1. Update `MINIMAP.md` and `README.md`** to reflect the actual code: 11 effects, no `tools/` directory, unused `NerveCompositor`, real persistence model.
-- [ ] **D2. Add a persistence architecture note** documenting both stores, their scopes, write paths, and startup precedence.
+- [x] **D1. Update `MINIMAP.md` and `README.md`** to reflect the actual code: 10 effects (halftone removed), no `tools/` directory, unused `NerveCompositor`, real persistence model. *(MINIMAP now omits the nonexistent `tools/` tree, marks the compositor and shader wrapper as unused, and lists the 10 overlays. README gained "Rendering model" and "Persistence model" sections.)*
+- [x] **D2. Add a persistence architecture note** documenting both stores, their scopes, write paths, and startup precedence. *(Added `README.md` → "Persistence model": KConfig authoritative, per-containment scope, `writeConfig()` flush, `StyleMigrated` one-time migration, local mirrors migration-only.)*
 
 ### E. Verification
 
 - [x] **E1. Reboot test:** set style and effects in-canvas, restart `plasma-plasmashell`, verify the exact style/stack returns. *(Verified with two full `plasma-plasmashell` service restarts; the migrated state survived on disk and in the live config.)*
-- [x] **E2. Config-dialog round-trip:** toggle each of the 11 effects in Plasma settings, Apply, restart, verify all survive. *(Dialog logic covered by `tests/tst_config_effects.qml`: all 11 real switches are clicked, activation order is preserved, Apply→reopen round-trips, and malformed JSON normalizes. Live KConfig round-trip of all 11 booleans plus a scrambled-order stack survived a full shell restart.)*
+- [x] **E2. Config-dialog round-trip:** toggle each of the 10 effects in Plasma settings, Apply, restart, verify all survive. *(Dialog logic covered by `tests/tst_config_effects.qml`: all 10 real switches are clicked, activation order is preserved, Apply→reopen round-trips, legacy `halftone` is dropped, and malformed JSON normalizes. Live KConfig round-trip of the effect booleans plus a scrambled-order stack survived a full shell restart.)*
 - [x] **E3. Mixed-path test:** in-canvas toggle → config dialog Apply → restart; verify no reversion or lost effect. *(Simulated in-canvas write `["prism_blur","lidar_sobel","vignette"]`, then dialog Apply `["prism_blur","vignette","duotone"]`; after a full restart the live and on-disk state were exactly the dialog value — LiDAR stayed off, Duotone stayed on, no reversion.)*
 - [ ] **E4. Multi-monitor/activity test:** set different styles per containment; verify isolation. *(Not run: this machine exposes a single NerveCenter containment.)*
 - [x] **E5. Local-reset test:** move/delete `~/.config/kde.org/plasmashell.conf`; verify KConfig style/effects restore. *(Moved the file aside and restarted: style 3 and `["prism_blur","lidar_sobel"]` were restored from KConfig alone. The original file was then restored intact.)*
 - [ ] **E6. Layer-order test:** enable the same effects in different orders; verify z-order, occlusion, and no marker collisions. *(Activation order is verified in the data model; visual z-order/occlusion still needs a human check.)*
-- [ ] **E7. Performance check:** measure CPU/GPU with 1, 8, and 11 effects active; update the "0% GPU" wording accordingly.
+- [ ] **E7. Performance check:** measure CPU/GPU with 1, 5, and 10 effects active; update the "0% GPU" wording accordingly.
 
 > **Static verification (2026-10-25):** `qmllint 6.11.2` parses `main.qml`, `config.qml`, and `NerveFrame.qml` with exit code `0` (warnings only, all pre-existing).
 >
-> **Config-dialog tests (2026-10-25):** `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests/tst_config_effects.qml` → **11 passed, 0 failed**. The tests instantiate the real `config.qml`, drive the 11 `QQC2.Switch` controls through `checked` + `clicked`, and assert the KConfigXT `cfg_*` values against `EffectsStackJson`.
+> **Config-dialog tests (2026-10-25):** `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests/tst_config_effects.qml` → **12 passed, 0 failed**. The tests instantiate the real `config.qml`, drive the 10 `QQC2.Switch` controls through `checked` + `clicked`, and assert the KConfigXT `cfg_*` values against `EffectsStackJson`.
+>
+> **Halftone removal + C1 (2026-10-25):** halftone was removed from `main.xml`, both QML UIs, the runtime frame, the shader registry, the compositor branch, and the shader files. `sanitizeEffectStack()` and the config-dialog filter drop legacy `"halftone"` keys on load. Live verification: injected `["prism_blur","halftone","hologram","scanlines"]` into the running KConfig and restarted the shell; the live and on-disk stack both came back as `["prism_blur","hologram","scanlines"]` with no QML errors. The orphaned `EffectHalftone` key was also removed from the live config. `NerveCompositor.qml` / `NerveShaderLayer.qml` are now labelled unused, and README/MINIMAP describe ordered backdrop overlays.
 >
 > **Live migration verification (2026-10-25):** before the patch, local `PanelStyle=3` and KConfig `PanelStyle=1`; KConfig stack was `["prism_blur","lidar_sobel"]` with `EffectHologram=true`. After the first reload, the live KConfig became `PanelStyle=3`, `StyleMigrated=true`, stack `["prism_blur","lidar_sobel"]`, `EffectHologram=false`, `EffectPrismBlur=true`, `EffectLidarSobel=true`. `root.configuration.writeConfig()` flushed the same values to `plasma-org.kde.plasma.desktop-appletsrc`. A second full shell restart returned the identical state, confirming the migration is one-time and stable.
 >

@@ -21,12 +21,6 @@ bgengine/
 │   └── nervecenter.conf.example         # Sample preset & layout configuration
 ├── nervecenter/                         # KDE Plasma 6 Wallpaper Package root
 │   ├── metadata.json                    # Plugin declaration & D-Bus service ID
-│   ├── tools/                           # Standalone tools & visual studio
-│   │   ├── nerve-studio                 # Executable launcher for NerveShader Studio
-│   │   ├── nerve-bake                   # Headless offline baker CLI & LRU cache manager
-│   │   ├── BakeRunner.qml               # Headless QML compositor driver
-│   │   └── studio/
-│   │       └── NerveStudio.qml          # Standalone Qt Quick 6 visual drag-and-drop studio
 │   └── contents/
 │       ├── config/
 │       │   └── main.xml                 # KConfigXT schema definition
@@ -38,13 +32,12 @@ bgengine/
 │           │   ├── ascii_atlas.png      # 16-glyph Sobel contour runes & density ramp atlas
 │           │   └── flir_ironbow_lut.png # 256x1 military thermal palette lookup texture
 │           ├── shaders/                 # Hardware-accelerated graphics shaders (GLSL 100es/120/150)
-│           │   ├── shader_registry.json # Machine-readable metadata registry for all shaders
-│           │   ├── blend.frag           # Universal unpremultiplied alpha ping-pong blend stage
+│           │   ├── shader_registry.json # Shader metadata (documentation only; not loaded at runtime)
+│           │   ├── blend.frag           # Alpha blend stage (only used by the unused compositor)
 │           │   ├── prism_blur.frag      # Optical chromatic dispersion frosted glass blur
 │           │   ├── ascii.frag           # Technical Sobel contour-detecting ASCII matrix
 │           │   ├── lidar_sobel.frag     # Pre-filtered anti-aliased 3D wireframe extractor
 │           │   ├── thermal_flir.frag    # FLIR Ironbow thermal reconnaissance shader
-│           │   ├── halftone.frag        # Pixel-space aspect-corrected halftone dot screen
 │           │   ├── duotone.frag         # 3-stop theme palette luminance remapping
 │           │   ├── dither_frost.frag    # 8-tap Poisson dithered frosted acrylic blur
 │           │   ├── dither_quantize.frag # Mandatory final ±1.0 LSB triangular dither pass
@@ -52,8 +45,8 @@ bgengine/
 │           │   ├── streak_blur.frag     # Anamorphic streak Pass 2: 17-tap bilinear paired blur
 │           │   ├── streak_comp.frag     # Anamorphic streak Pass 3: additive optical composite
 │           │   └── tiltshift.frag       # Center focus mask with specular highlight bokeh
-│           ├── NerveCompositor.qml      # Multi-pass ping-pong compositor engine (RGBA16F)
-│           ├── NerveShaderLayer.qml     # Universal standardized UBO shader wrapper
+│           ├── NerveCompositor.qml      # UNUSED reference multi-pass compositor (never instantiated)
+│           ├── NerveShaderLayer.qml     # UNUSED reference shader wrapper (only used by the compositor)
 │           ├── main.qml                 # WallpaperItem entry point & canvas engine
             ├── config.qml               # Plasma wallpaper settings dialog (3-tab GUI & shortcut manager)
             ├── NervePanel.qml           # Master HUD panel class (8-point resize, clamping, edit mode)
@@ -118,7 +111,7 @@ bgengine/
 - **File:** [`nervecenter/contents/ui/NervePanelBase.qml`](nervecenter/contents/ui/NervePanelBase.qml) & [`DraggablePanel.qml`](nervecenter/contents/ui/DraggablePanel.qml)
   - Backward-compatibility aliases inheriting `NervePanel.qml`.
 - **File:** [`nervecenter/contents/ui/NerveFrame.qml`](nervecenter/contents/ui/NerveFrame.qml)
-  - Master procedural HUD framing engine supporting 7 Base Styles and 7 Stackable Micro-Styles with **true 0.0% idle GPU overhead**:
+  - Master procedural HUD framing engine supporting 7 Base Styles and 10 ordered backdrop overlays:
     - **7 Base Styles (`panelStyle`):**
       - `0: CYBER_WIREFRAME`: Classic cyberpunk HUD, corner brackets, crosshairs.
       - `1: GLASS_GLASSMORPHIC`: Frosted glass blur, dual-layer luminous rim.
@@ -127,15 +120,19 @@ bgengine/
       - `4: STEALTH_VOID`: $0\%$ transparent floating backdrop, hairline corner crosshairs.
       - `5: RETRO_PHOSPHOR_CRT`: Vintage CRT cathode tint, phosphor glow inner bezel.
       - `6: CYBER_NEUMORPHIC`: Recessed milled-carbon look, specular highlight and deep ambient shadow.
-    - **Stackable Micro-Styles & Shaders (Chronological Z-Stacking & Zero GPU Overhead):**
-      - Stacked dynamically in the exact order enabled (`EffectsStackJson` & `activeEffectsStack`, tracked with live `[L1]`, `[L2]` layer indicators in the HUD Style Menu).
-      - `+ PRISM_FROST_BLUR`: Optical chromatic dispersion blur shader with multi-sample RGB separation (`live: false`, zero idle GPU).
+    - **Ordered Backdrop Overlays (painted in activation order):**
+      - Painted in the exact order enabled (`EffectsStackJson` & `activeEffectsStack`, shown as `[L1]`, `[L2]`, … in the HUD Style Menu). Each overlay samples the original wallpaper crop, so this is painter's-algorithm alpha blending — **not** a chained multi-pass pipeline.
+      - `+ PRISM_FROST_BLUR`: Optical chromatic dispersion blur shader with multi-sample RGB separation (`live: false`).
       - `+ HOLOGRAM_EDGES`: Static cyan-top / magenta-bottom neon gradient borders.
       - `+ VIGNETTE_DEPTH`: Static multi-directional dark shadow gradient falls.
       - `+ CIRCUIT_BOARD`: Static deterministic PCB traces, vias, and solder pads.
       - `+ INTERLACE_SCANLINES`: Static $2\text{px}$ alternating dark CRT raster scanlines.
-      - `+ TECHNICAL_ASCII_ART`: Advanced Sobel edge-contour detecting shader with directional runes (`|`, `/`, `\`, `-`), dual-color highlight grading (`u_highlightColor`), 16-level luminance quantization, and internal phosphor cathode scanlines (`live: false`, zero idle GPU).
-      - *(Note: Legacy Hex Composite and Technical Graticule removed per minimalist HUD design)*.
+      - `+ TECHNICAL_ASCII_ART`: Sobel edge-contour detecting shader with directional runes, dual-color highlight grading, 16-level luminance quantization, and phosphor scanlines (`live: false`).
+      - `+ LIDAR_SOBEL_CONTOUR`: Pre-filtered anti-aliased 3D wireframe edge extractor (`live: false`).
+      - `+ THERMAL_FLIR_RECON`: FLIR Ironbow thermal palette (`live: false`).
+      - `+ DUOTONE_ATMOSPHERE`: 3-stop theme palette luminance remapping (`live: false`).
+      - `+ DITHER_FROST_ACRYLIC`: 8-tap Poisson dithered frosted acrylic blur (`live: false`).
+      - *(Note: Halftone Dot Screen removed; legacy Hex Composite and Technical Graticule were removed earlier.)*
 
 ---
 

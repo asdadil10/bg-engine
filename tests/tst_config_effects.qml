@@ -143,20 +143,20 @@ TestCase {
         cfg2.destroy()
     }
 
-    // Click every one of the 11 switches; each must reach the stack.
-    function test_07_allElevenEffects() {
+    // Click every one of the 10 switches; each must reach the stack.
+    function test_07_allTenEffects() {
         var keywords = [
             "Optical chromatic", "Contour-detecting 16-glyph", "Luminous neon",
             "Top and bottom dark", "Deterministic PCB", "Static 2px",
-            "Pre-filtered anti-aliased", "FLIR Ironbow", "Pixel-space",
+            "Pre-filtered anti-aliased", "FLIR Ironbow",
             "3-stop theme", "8-tap Poisson"
         ]
         var keys = ["prism_blur", "ascii", "hologram", "vignette", "circuit",
-                    "scanlines", "lidar_sobel", "thermal_flir", "halftone",
+                    "scanlines", "lidar_sobel", "thermal_flir",
                     "duotone", "dither_frost"]
         var cfgKeys = ["cfg_EffectPrismBlur", "cfg_EffectAscii", "cfg_EffectHologram",
                        "cfg_EffectVignette", "cfg_EffectCircuit", "cfg_EffectScanlines",
-                       "cfg_EffectLidarSobel", "cfg_EffectThermalFlir", "cfg_EffectHalftone",
+                       "cfg_EffectLidarSobel", "cfg_EffectThermalFlir",
                        "cfg_EffectDuotone", "cfg_EffectDitherFrost"]
 
         // Reset to empty through the UI.
@@ -173,11 +173,11 @@ TestCase {
             compare(cfg.effectsOrder.indexOf(keys[i]), i,
                     keys[i] + " should be at activation position " + i)
         }
-        compare(cfg.effectsOrder.length, 11)
+        compare(cfg.effectsOrder.length, 10)
 
         // Read-back as Plasma Apply would: every boolean matches the stack.
         var parsed = JSON.parse(cfg.cfg_EffectsStackJson)
-        compare(parsed.length, 11)
+        compare(parsed.length, 10)
         for (var k = 0; k < cfgKeys.length; k++) {
             compare(cfg[cfgKeys[k]], parsed.indexOf(keys[k]) >= 0,
                     cfgKeys[k] + " disagrees with stack")
@@ -198,5 +198,14 @@ TestCase {
         cfg.cfg_EffectsStackJson = '{"hologram":true}'
         compare(cfg.cfg_EffectsStackJson, "[]")
         compare(cfg.effectsOrder.length, 0)
+    }
+
+    // A stack saved before halftone was removed must be cleaned on load.
+    function test_10_legacyHalftoneDropped() {
+        cfg.cfg_EffectsStackJson = '["vignette","halftone","duotone"]'
+        compare(cfg.cfg_EffectsStackJson, '["vignette","duotone"]')
+        compare(cfg.effectsOrder.length, 2)
+        verify(cfg.cfg_EffectVignette)
+        verify(cfg.cfg_EffectDuotone)
     }
 }

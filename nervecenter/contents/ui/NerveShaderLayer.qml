@@ -1,6 +1,11 @@
 /*
  * NerveShaderLayer.qml  —  NerveCenter universal shader layer wrapper
  *
+ * STATUS: NOT WIRED INTO THE SHIPPED WALLPAPER.
+ *   Only `NerveCompositor.qml` (itself unused) would use this wrapper. The live
+ *   wallpaper draws its own ShaderEffect blocks in `NerveFrame.qml` as ordered
+ *   backdrop overlays; there is no chained pass between them.
+ *
  * Every shader in the registry plugs into this component regardless of its
  * internal formula.  The standardized UBO (p0..p3, c0..c2, u_resolution,
  * u_texelSize) is wired from QML properties, so the compositor only needs to

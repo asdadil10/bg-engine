@@ -20,6 +20,46 @@
 
 ---
 
+## Rendering model
+
+NerveCenter ships **ordered backdrop overlays**, not a chained compositor.
+
+- A **base style** (0–6) paints the panel fill, radius, border, and its
+  decorations. Base-style decorations are pinned above the overlays.
+- **10 micro-effects** (prism blur, hologram, vignette, circuit, scanlines,
+  ASCII, LiDAR Sobel, thermal FLIR, duotone, dither frost) are painted in the
+  order you enable them. `EffectsStackJson` stores that order, and
+  `z = index + 5` is the paint order shown as `[L1]`, `[L2]`, … in the menu.
+- Every effect samples the **original wallpaper crop**. Effect N does not read
+  effect N−1's output, so this is painter's-algorithm alpha blending, not a
+  multi-pass render chain. An opaque overlay simply covers the one below it.
+- `NerveCompositor.qml` and `NerveShaderLayer.qml` are **unused reference
+  implementations** for a future chained pipeline. `shader_registry.json` is
+  documentation only and is not loaded at runtime.
+
+---
+
+## Persistence model
+
+- **KConfig is authoritative.** Base style (`PanelStyle`) and the effect stack
+  (`EffectsStackJson` plus every `Effect*` boolean) live in the wallpaper's
+  per-containment group in
+  `~/.config/plasma-org.kde.plasma.desktop-appletsrc`. Both the in-canvas menu
+  and the Plasma config dialog write there, and `root.configuration.writeConfig()`
+  flushes the group to disk.
+- **Local settings are migration-only.** Older releases mirrored style and
+  effects into `~/.config/kde.org/plasmashell.conf` through `QtCore.Settings`.
+  A one-time migration guarded by the KConfig `StyleMigrated` flag reads those
+  mirrors, normalizes the result into KConfig, and never reads them again.
+- **Stack and booleans stay in sync.** Every write normalizes `EffectsStackJson`
+  and the `Effect*` booleans together; unknown or duplicate keys (including the
+  removed `halftone`) are dropped on load.
+- **Legacy key cleanup.** `scripts/cleanup-legacy-settings.py` removes obsolete
+  local keys as text (preserving the rest of the shared file) and runs from
+  `install.sh`.
+
+---
+
 ## Codebase Navigation & Architecture
 
 For AI coding agents and developers exploring the project structure, see **[`MINIMAP.md`](MINIMAP.md)** for:

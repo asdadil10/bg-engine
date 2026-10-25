@@ -26,11 +26,12 @@ Rectangle {
     readonly property bool showAscii:       frame.configEffectEnabled("EffectAscii")
     readonly property bool showLidarSobel:  frame.configEffectEnabled("EffectLidarSobel")
     readonly property bool showThermalFlir: frame.configEffectEnabled("EffectThermalFlir")
-    readonly property bool showHalftone:    frame.configEffectEnabled("EffectHalftone")
     readonly property bool showDuotone:     frame.configEffectEnabled("EffectDuotone")
     readonly property bool showDitherFrost: frame.configEffectEnabled("EffectDitherFrost")
 
-    // Dynamic chronological stacking order helpers (stacked in the exact order user turns them on)
+    // Dynamic chronological overlay order (painted in the exact order the user
+    // enables them; each effect samples the original wallpaper, not the
+    // previous effect's output)
     function getEffectZ(key, fallbackZ) {
         if (typeof root !== "undefined" && root.activeEffectsStack) {
             var idx = root.activeEffectsStack.indexOf(key);
@@ -1014,76 +1015,6 @@ Rectangle {
             function onStatusChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
         }
         Component.onCompleted: { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: HALFTONE DOT SCREEN
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: halftoneContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("halftone", frame.showHalftone)
-        clip: true
-        z: frame.getEffectZ("halftone", 9)
-
-        ShaderEffectSource {
-            id: halftoneSourceTexture
-            anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
-            }
-            live: false
-            hideSource: false
-            smooth: false
-        }
-
-        ShaderEffect {
-            anchors.fill: parent
-            supportsAtlasTextures: true
-            property var source: halftoneSourceTexture
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(8.0, 0.6, 0, 0) // cellSize, bgDarken
-            property vector4d p1: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p2: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p3: Qt.vector4d(0, 0, 0, 0)
-            property color c0: frame.accentColor
-            property color c1: frame.highlightColor
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-            fragmentShader: "shaders/halftone.frag.qsb"
-        }
-
-        onVisibleChanged: { if (visible) halftoneSourceTexture.scheduleUpdate(); }
-        Connections {
-            target: frame
-            function onWidthChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onActiveEffectsStackChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-            function onBgImageChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: { if (halftoneContainer.visible) halftoneSourceTexture.scheduleUpdate(); }
     }
 
     // ═══════════════════════════════════════════════════════════
