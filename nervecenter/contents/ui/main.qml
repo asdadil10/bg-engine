@@ -229,6 +229,26 @@ WallpaperItem {
         }
     }
 
+    function persistBackground() {
+        if (layoutSettings.bgImageOverride !== "") {
+            root.configuration.BackgroundImage = layoutSettings.bgImageOverride;
+        } else {
+            root.configuration.BackgroundImage = "";
+        }
+        if (layoutSettings.bgImageOpacity !== -1) {
+            root.configuration.BackgroundImageOpacity = layoutSettings.bgImageOpacity;
+        }
+        // Also persist BackgroundFillMode if we have a binding
+        if (layoutSettings.fillModeOverride !== undefined) {
+            root.configuration.BackgroundFillMode = layoutSettings.fillModeOverride;
+        }
+        root.setPanelStyle(root.panelStyle);
+        root.syncEffectsToConfig();
+        if (typeof root.configuration.writeConfig === "function") {
+            root.configuration.writeConfig();
+        }
+    }
+
     Settings {
         id: panelsVisibilitySettings
         category: "PanelsVisibility"
@@ -1214,7 +1234,10 @@ WallpaperItem {
                             Layout.fillHeight: true
                             Layout.preferredWidth: dimRow.implicitWidth
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: layoutSettings.bgImageOpacity = (root.bgImageOpacity > 0.0 ? 0.0 : 0.85)
+                            onClicked: {
+                                layoutSettings.bgImageOpacity = (root.bgImageOpacity > 0.0 ? 0.0 : 0.85);
+                                persistBackground();
+                            }
 
                             RowLayout {
                                 id: dimRow
@@ -1265,7 +1288,10 @@ WallpaperItem {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: bgFileDialog.open()
+                                        onClicked: {
+                                            bgFileDialog.open()
+                                            // persist after file dialog selection will be handled by onAccepted
+                                        }
                                     }
                                 }
                                 Text {
@@ -1280,7 +1306,10 @@ WallpaperItem {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: layoutSettings.bgImageOverride = ""
+                                        onClicked: {
+                                            layoutSettings.bgImageOverride = "";
+                                            persistBackground();
+                                        }
                                     }
                                 }
                             }
@@ -1550,6 +1579,7 @@ WallpaperItem {
         onAccepted: {
             var path = selectedFile.toString();
             layoutSettings.bgImageOverride = path;
+            persistBackground();
         }
     }
 }
