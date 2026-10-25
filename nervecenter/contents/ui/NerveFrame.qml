@@ -8,21 +8,27 @@ import Qt5Compat.GraphicalEffects
 Rectangle {
     id: frame
     
-    // Safety check fallback for global layoutSettings
-    readonly property int activePanelStyle: (typeof layoutSettings !== "undefined") ? layoutSettings.panelStyle : 0
+    // KConfig is the single source of truth for the base style and effect flags.
+    readonly property int activePanelStyle: (typeof root !== "undefined" && root.panelStyle !== undefined)
+                                             ? root.panelStyle : 0
 
-    // Stackable effect flags
-    readonly property bool showPrismBlur:   (typeof layoutSettings !== "undefined") ? layoutSettings.effectPrismBlur   : false
-    readonly property bool showHologram:    (typeof layoutSettings !== "undefined") ? layoutSettings.effectHologram    : false
-    readonly property bool showVignette:    (typeof layoutSettings !== "undefined") ? layoutSettings.effectVignette    : false
-    readonly property bool showCircuit:     (typeof layoutSettings !== "undefined") ? layoutSettings.effectCircuit     : false
-    readonly property bool showScanlines:   (typeof layoutSettings !== "undefined") ? layoutSettings.effectScanlines   : false
-    readonly property bool showAscii:       (typeof layoutSettings !== "undefined") ? layoutSettings.effectAscii       : false
-    readonly property bool showLidarSobel:  (typeof layoutSettings !== "undefined") ? layoutSettings.effectLidarSobel  : false
-    readonly property bool showThermalFlir: (typeof layoutSettings !== "undefined") ? layoutSettings.effectThermalFlir : false
-    readonly property bool showHalftone:    (typeof layoutSettings !== "undefined") ? layoutSettings.effectHalftone    : false
-    readonly property bool showDuotone:     (typeof layoutSettings !== "undefined") ? layoutSettings.effectDuotone     : false
-    readonly property bool showDitherFrost: (typeof layoutSettings !== "undefined") ? layoutSettings.effectDitherFrost : false
+    function configEffectEnabled(configKey) {
+        return (typeof root !== "undefined" && root.configuration
+                && root.configuration[configKey] === true)
+    }
+
+    // Stackable effect flags (fallback only; visibility is driven by activeEffectsStack)
+    readonly property bool showPrismBlur:   frame.configEffectEnabled("EffectPrismBlur")
+    readonly property bool showHologram:    frame.configEffectEnabled("EffectHologram")
+    readonly property bool showVignette:    frame.configEffectEnabled("EffectVignette")
+    readonly property bool showCircuit:     frame.configEffectEnabled("EffectCircuit")
+    readonly property bool showScanlines:   frame.configEffectEnabled("EffectScanlines")
+    readonly property bool showAscii:       frame.configEffectEnabled("EffectAscii")
+    readonly property bool showLidarSobel:  frame.configEffectEnabled("EffectLidarSobel")
+    readonly property bool showThermalFlir: frame.configEffectEnabled("EffectThermalFlir")
+    readonly property bool showHalftone:    frame.configEffectEnabled("EffectHalftone")
+    readonly property bool showDuotone:     frame.configEffectEnabled("EffectDuotone")
+    readonly property bool showDitherFrost: frame.configEffectEnabled("EffectDitherFrost")
 
     // Dynamic chronological stacking order helpers (stacked in the exact order user turns them on)
     function getEffectZ(key, fallbackZ) {

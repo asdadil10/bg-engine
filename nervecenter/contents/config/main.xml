@@ -38,6 +38,10 @@
       <label>Backdrop panel styling (0=Wireframe, 1=Glassmorphic, 2=Flat, 3=Tactical, 4=Void, 5=RetroCRT, 6=Neumorphic)</label>
       <default>0</default>
     </entry>
+    <entry name="StyleMigrated" type="Bool">
+      <label>Internal: one-time split-store style/effect migration completed</label>
+      <default>false</default>
+    </entry>
     <entry name="EffectHologram" type="Bool">
       <label>Hologram edge neon borders overlay</label>
       <default>false</default>

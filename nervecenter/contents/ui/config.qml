@@ -33,6 +33,12 @@ ColumnLayout {
     property alias cfg_EffectCircuit:          effectCircuitSwitch.checked
     property alias cfg_EffectScanlines:        effectScanlinesSwitch.checked
     property alias cfg_EffectAscii:            effectAsciiSwitch.checked
+    property alias cfg_EffectLidarSobel:       effectLidarSobelSwitch.checked
+    property alias cfg_EffectThermalFlir:      effectThermalFlirSwitch.checked
+    property alias cfg_EffectHalftone:         effectHalftoneSwitch.checked
+    property alias cfg_EffectDuotone:          effectDuotoneSwitch.checked
+    property alias cfg_EffectDitherFrost:      effectDitherFrostSwitch.checked
+    property alias cfg_EffectsStackJson:       effectsStackJsonField.text
     property alias cfg_GridOpacity:            gridSlider.value
     property alias cfg_FontFamily:             fontFamilyCombo.currentText
     property alias cfg_FontScale:              fontScaleSlider.value
@@ -74,9 +80,90 @@ ColumnLayout {
         }
     }
 
+    QQC2.TextField {
+        id: effectsStackJsonField
+        visible: false
+        text: "[]"
+        onTextChanged: {
+            if (root.uiReady && !root.syncingEffectsUi) {
+                root.loadEffectsFromConfig()
+            }
+        }
+    }
+
     // Shortcut management model & helpers
     property var shortcutsListModel: []
     property bool syncingInternal: false
+
+    // Effect stack UI state (order is preserved when toggling switches)
+    property var effectsOrder: []
+    property bool syncingEffectsUi: false
+    property bool uiReady: false
+
+    readonly property var effectKeyOrder: [
+        "prism_blur", "hologram", "vignette", "circuit", "scanlines",
+        "ascii", "lidar_sobel", "thermal_flir", "halftone", "duotone",
+        "dither_frost"
+    ]
+
+    function effectSwitchByKey(key) {
+        switch (key) {
+            case "prism_blur":   return effectPrismBlurSwitch
+            case "hologram":     return effectHologramSwitch
+            case "vignette":     return effectVignetteSwitch
+            case "circuit":      return effectCircuitSwitch
+            case "scanlines":    return effectScanlinesSwitch
+            case "ascii":        return effectAsciiSwitch
+            case "lidar_sobel":  return effectLidarSobelSwitch
+            case "thermal_flir": return effectThermalFlirSwitch
+            case "halftone":     return effectHalftoneSwitch
+            case "duotone":      return effectDuotoneSwitch
+            case "dither_frost": return effectDitherFrostSwitch
+        }
+        return null
+    }
+
+    function loadEffectsFromConfig() {
+        var parsed = []
+        try {
+            parsed = JSON.parse(effectsStackJsonField.text || "[]")
+        } catch(e) {
+            parsed = []
+        }
+        if (!Array.isArray(parsed)) parsed = []
+
+        // main.qml repairs a legacy boolean-only config into EffectsStackJson
+        // at startup, so an empty stack here legitimately means "no effects".
+        effectsOrder = parsed
+        syncingEffectsUi = true
+        for (var j = 0; j < effectKeyOrder.length; j++) {
+            var toggle = effectSwitchByKey(effectKeyOrder[j])
+            if (toggle) toggle.checked = parsed.indexOf(effectKeyOrder[j]) >= 0
+        }
+        var normalized = JSON.stringify(parsed)
+        if (effectsStackJsonField.text !== normalized) {
+            effectsStackJsonField.text = normalized
+        }
+        syncingEffectsUi = false
+    }
+
+    function setEffectEnabled(key, enabled) {
+        if (syncingEffectsUi) return
+        var copy = []
+        for (var i = 0; i < effectsOrder.length; i++) {
+            if (effectsOrder[i] !== key) copy.push(effectsOrder[i])
+        }
+        if (enabled) copy.push(key)
+        effectsOrder = copy
+        // Keep the switch in lockstep even when this is called
+        // programmatically. Setting `checked` does not emit `clicked`,
+        // so this cannot re-enter.
+        var toggle = effectSwitchByKey(key)
+        if (toggle && toggle.checked !== enabled) toggle.checked = enabled
+        syncingEffectsUi = true
+        effectsStackJsonField.text = JSON.stringify(copy)
+        syncingEffectsUi = false
+    }
 
     readonly property var defaultShortcutsList: [
         { name: "Dolphin",  cmd: "dolphin",                     icon: "system-file-manager" },
@@ -190,6 +277,8 @@ ColumnLayout {
 
     Component.onCompleted: {
         reloadShortcutsModel();
+        uiReady = true;
+        loadEffectsFromConfig();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -443,6 +532,7 @@ ColumnLayout {
                 Kirigami.FormData.label: "Prism Glass Blur:"
                 text: "Optical chromatic dispersion frosted glass blur"
                 checked: false
+                onClicked: root.setEffectEnabled("prism_blur", checked)
             }
 
             QQC2.Switch {
@@ -450,6 +540,7 @@ ColumnLayout {
                 Kirigami.FormData.label: "ASCII Matrix Art:"
                 text: "Contour-detecting 16-glyph ASCII matrix phosphor shader"
                 checked: false
+                onClicked: root.setEffectEnabled("ascii", checked)
             }
 
             QQC2.Switch {
@@ -457,6 +548,7 @@ ColumnLayout {
                 Kirigami.FormData.label: "Hologram Edges:"
                 text: "Luminous neon gradient borders (top cyan, bottom magenta)"
                 checked: false
+                onClicked: root.setEffectEnabled("hologram", checked)
             }
 
             QQC2.Switch {
@@ -464,6 +556,7 @@ ColumnLayout {
                 Kirigami.FormData.label: "Vignette Depth:"
                 text: "Top and bottom dark radial gradients for visual contrast"
                 checked: false
+                onClicked: root.setEffectEnabled("vignette", checked)
             }
 
             QQC2.Switch {
@@ -471,6 +564,7 @@ ColumnLayout {
                 Kirigami.FormData.label: "Circuit Board:"
                 text: "Deterministic PCB traces, vias, and solder pad accents"
                 checked: false
+                onClicked: root.setEffectEnabled("circuit", checked)
             }
 
             QQC2.Switch {
@@ -478,6 +572,47 @@ ColumnLayout {
                 Kirigami.FormData.label: "CRT Interlace:"
                 text: "Static 2px horizontal raster scanline texture overlay"
                 checked: false
+                onClicked: root.setEffectEnabled("scanlines", checked)
+            }
+
+            QQC2.Switch {
+                id: effectLidarSobelSwitch
+                Kirigami.FormData.label: "LiDAR Sobel Contour:"
+                text: "Pre-filtered anti-aliased 3D wireframe edge extractor"
+                checked: false
+                onClicked: root.setEffectEnabled("lidar_sobel", checked)
+            }
+
+            QQC2.Switch {
+                id: effectThermalFlirSwitch
+                Kirigami.FormData.label: "Thermal FLIR Recon:"
+                text: "FLIR Ironbow thermal reconnaissance palette"
+                checked: false
+                onClicked: root.setEffectEnabled("thermal_flir", checked)
+            }
+
+            QQC2.Switch {
+                id: effectHalftoneSwitch
+                Kirigami.FormData.label: "Halftone Dot Screen:"
+                text: "Pixel-space aspect-corrected halftone dot screen"
+                checked: false
+                onClicked: root.setEffectEnabled("halftone", checked)
+            }
+
+            QQC2.Switch {
+                id: effectDuotoneSwitch
+                Kirigami.FormData.label: "Duotone Atmosphere:"
+                text: "3-stop theme palette luminance remapping"
+                checked: false
+                onClicked: root.setEffectEnabled("duotone", checked)
+            }
+
+            QQC2.Switch {
+                id: effectDitherFrostSwitch
+                Kirigami.FormData.label: "Dither Frost Acrylic:"
+                text: "8-tap Poisson dithered frosted acrylic blur"
+                checked: false
+                onClicked: root.setEffectEnabled("dither_frost", checked)
             }
 
             RowLayout {

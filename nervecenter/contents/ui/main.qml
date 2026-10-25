@@ -51,6 +51,15 @@ WallpaperItem {
     // Dynamic Chronological Stacking Order for Micro-Style Effects
     property var activeEffectsStack: []
 
+    // KConfig is the single source of truth for the base style.
+    readonly property int panelStyle: (root.configuration && root.configuration.PanelStyle !== undefined)
+                                      ? root.configuration.PanelStyle : 0
+
+    // Guard against feedback loops while writing KConfig programmatically.
+    property bool syncingEffects: false
+    // Set once migration/startup has established the initial stack.
+    property bool effectsReady: false
+
     function isEffectActive(key) {
         return activeEffectsStack.indexOf(key) >= 0;
     }
@@ -58,6 +67,60 @@ WallpaperItem {
     function getEffectLayer(key) {
         var idx = activeEffectsStack.indexOf(key);
         return idx >= 0 ? (idx + 1) : 0;
+    }
+
+    function allEffectKeys() {
+        return [
+            "prism_blur", "hologram", "vignette", "circuit", "scanlines",
+            "ascii", "lidar_sobel", "thermal_flir", "halftone", "duotone",
+            "dither_frost"
+        ];
+    }
+
+    function effectConfigKey(key) {
+        switch (key) {
+            case "prism_blur":   return "EffectPrismBlur";
+            case "hologram":     return "EffectHologram";
+            case "vignette":     return "EffectVignette";
+            case "circuit":      return "EffectCircuit";
+            case "scanlines":    return "EffectScanlines";
+            case "ascii":        return "EffectAscii";
+            case "lidar_sobel":  return "EffectLidarSobel";
+            case "thermal_flir": return "EffectThermalFlir";
+            case "halftone":     return "EffectHalftone";
+            case "duotone":      return "EffectDuotone";
+            case "dither_frost": return "EffectDitherFrost";
+        }
+        return "";
+    }
+
+    function stackFromConfigBooleans() {
+        var out = [];
+        var keys = allEffectKeys();
+        for (var i = 0; i < keys.length; i++) {
+            var cfgKey = effectConfigKey(keys[i]);
+            if (cfgKey !== "" && root.configuration && root.configuration[cfgKey]) {
+                out.push(keys[i]);
+            }
+        }
+        return out;
+    }
+
+    // Legacy migration helper: the old local Settings mirror.
+    function stackFromLocalBooleans() {
+        var out = [];
+        if (layoutSettings.effectPrismBlur)   out.push("prism_blur");
+        if (layoutSettings.effectHologram)    out.push("hologram");
+        if (layoutSettings.effectVignette)    out.push("vignette");
+        if (layoutSettings.effectCircuit)     out.push("circuit");
+        if (layoutSettings.effectScanlines)   out.push("scanlines");
+        if (layoutSettings.effectAscii)       out.push("ascii");
+        if (layoutSettings.effectLidarSobel)  out.push("lidar_sobel");
+        if (layoutSettings.effectThermalFlir) out.push("thermal_flir");
+        if (layoutSettings.effectHalftone)    out.push("halftone");
+        if (layoutSettings.effectDuotone)     out.push("duotone");
+        if (layoutSettings.effectDitherFrost) out.push("dither_frost");
+        return out;
     }
 
     function toggleEffect(key) {
@@ -78,6 +141,7 @@ WallpaperItem {
     }
 
     function syncEffectFromConfig(key, active) {
+        if (syncingEffects || !effectsReady) return;
         var copy = [];
         var found = false;
         for (var i = 0; i < activeEffectsStack.length; i++) {
@@ -92,24 +156,47 @@ WallpaperItem {
             copy.push(key);
         }
         activeEffectsStack = copy;
+        // Persist the new order and normalize every KConfig flag so the
+        // boolean entries and EffectsStackJson can never disagree.
+        syncEffectsToConfig();
     }
 
     function syncEffectsToConfig() {
-        layoutSettings.effectHologram = isEffectActive("hologram");
-        layoutSettings.effectVignette = isEffectActive("vignette");
-        layoutSettings.effectCircuit = isEffectActive("circuit");
-        layoutSettings.effectPrismBlur = isEffectActive("prism_blur");
-        layoutSettings.effectScanlines = isEffectActive("scanlines");
-        layoutSettings.effectAscii = isEffectActive("ascii");
-        layoutSettings.effectLidarSobel = isEffectActive("lidar_sobel");
-        layoutSettings.effectThermalFlir = isEffectActive("thermal_flir");
-        layoutSettings.effectHalftone = isEffectActive("halftone");
-        layoutSettings.effectDuotone = isEffectActive("duotone");
-        layoutSettings.effectDitherFrost = isEffectActive("dither_frost");
-        layoutSettings.effectsStackJson = JSON.stringify(activeEffectsStack);
+        if (syncingEffects || !root.configuration) return;
+        syncingEffects = true;
+        var changed = false;
+        try {
+            var stackJson = JSON.stringify(activeEffectsStack);
+            if (root.configuration.EffectsStackJson !== undefined
+                    && root.configuration.EffectsStackJson !== stackJson) {
+                root.configuration.EffectsStackJson = stackJson;
+                changed = true;
+            }
+            var keys = allEffectKeys();
+            for (var i = 0; i < keys.length; i++) {
+                var cfgKey = effectConfigKey(keys[i]);
+                if (cfgKey !== "" && root.configuration[cfgKey] !== undefined) {
+                    var enabled = isEffectActive(keys[i]);
+                    if (root.configuration[cfgKey] !== enabled) {
+                        root.configuration[cfgKey] = enabled;
+                        changed = true;
+                    }
+                }
+            }
+            if (changed && typeof root.configuration.writeConfig === "function") {
+                root.configuration.writeConfig();
+            }
+        } finally {
+            syncingEffects = false;
+        }
+    }
 
-        if (root.configuration.EffectsStackJson !== undefined) {
-            root.configuration.EffectsStackJson = layoutSettings.effectsStackJson;
+    function setPanelStyle(index) {
+        if (root.configuration && root.configuration.PanelStyle !== undefined) {
+            root.configuration.PanelStyle = index;
+            if (typeof root.configuration.writeConfig === "function") {
+                root.configuration.writeConfig();
+            }
         }
     }
 
@@ -192,11 +279,12 @@ WallpaperItem {
         property real bgImageOpacity: -1
         property real hudOpacity: -1
         property string bgImageOverride: ""
+        // Legacy mirror, read only by the one-time migration in Component.onCompleted.
         property int panelStyle: 0
         property string fontFamilyOverride: ""
         property real fontScaleOverride: -1
 
-        // Stackable effect overlays
+        // Legacy mirrors, read only by the one-time migration in Component.onCompleted.
         property bool effectHologram: false
         property bool effectVignette: false
         property bool effectCircuit: false
@@ -240,23 +328,29 @@ WallpaperItem {
             if (key === "BackgroundImageOpacity") { layoutSettings.bgImageOpacity = -1 }
             if (key === "HudOpacity") { layoutSettings.hudOpacity = -1 }
             if (key === "BackgroundImage") { layoutSettings.bgImageOverride = "" }
-            if (key === "PanelStyle") { layoutSettings.panelStyle = value }
-            if (key === "EffectHologram") { layoutSettings.effectHologram = value; root.syncEffectFromConfig("hologram", value) }
-            if (key === "EffectVignette") { layoutSettings.effectVignette = value; root.syncEffectFromConfig("vignette", value) }
-            if (key === "EffectCircuit") { layoutSettings.effectCircuit = value; root.syncEffectFromConfig("circuit", value) }
-            if (key === "EffectPrismBlur") { layoutSettings.effectPrismBlur = value; root.syncEffectFromConfig("prism_blur", value) }
-            if (key === "EffectScanlines") { layoutSettings.effectScanlines = value; root.syncEffectFromConfig("scanlines", value) }
-            if (key === "EffectAscii") { layoutSettings.effectAscii = value; root.syncEffectFromConfig("ascii", value) }
-            if (key === "EffectLidarSobel") { layoutSettings.effectLidarSobel = value; root.syncEffectFromConfig("lidar_sobel", value) }
-            if (key === "EffectThermalFlir") { layoutSettings.effectThermalFlir = value; root.syncEffectFromConfig("thermal_flir", value) }
-            if (key === "EffectHalftone") { layoutSettings.effectHalftone = value; root.syncEffectFromConfig("halftone", value) }
-            if (key === "EffectDuotone") { layoutSettings.effectDuotone = value; root.syncEffectFromConfig("duotone", value) }
-            if (key === "EffectDitherFrost") { layoutSettings.effectDitherFrost = value; root.syncEffectFromConfig("dither_frost", value) }
+            // PanelStyle is bound directly to KConfig via root.panelStyle.
+            if (key === "EffectHologram") { root.syncEffectFromConfig("hologram", value) }
+            if (key === "EffectVignette") { root.syncEffectFromConfig("vignette", value) }
+            if (key === "EffectCircuit") { root.syncEffectFromConfig("circuit", value) }
+            if (key === "EffectPrismBlur") { root.syncEffectFromConfig("prism_blur", value) }
+            if (key === "EffectScanlines") { root.syncEffectFromConfig("scanlines", value) }
+            if (key === "EffectAscii") { root.syncEffectFromConfig("ascii", value) }
+            if (key === "EffectLidarSobel") { root.syncEffectFromConfig("lidar_sobel", value) }
+            if (key === "EffectThermalFlir") { root.syncEffectFromConfig("thermal_flir", value) }
+            if (key === "EffectHalftone") { root.syncEffectFromConfig("halftone", value) }
+            if (key === "EffectDuotone") { root.syncEffectFromConfig("duotone", value) }
+            if (key === "EffectDitherFrost") { root.syncEffectFromConfig("dither_frost", value) }
             if (key === "EffectsStackJson") {
-                try {
-                    var s = JSON.parse(value || "[]");
-                    if (Array.isArray(s)) root.activeEffectsStack = s;
-                } catch(e) {}
+                if (root.effectsReady && !root.syncingEffects) {
+                    try {
+                        var s = JSON.parse(value || "[]");
+                        if (Array.isArray(s)) {
+                            root.activeEffectsStack = s;
+                            // Normalize the boolean entries to match the stack.
+                            root.syncEffectsToConfig();
+                        }
+                    } catch(e) {}
+                }
             }
             if (key === "FontFamily") { layoutSettings.fontFamilyOverride = "" }
             if (key === "FontScale") { layoutSettings.fontScaleOverride = -1 }
@@ -336,29 +430,71 @@ WallpaperItem {
             panelsVisibilitySettings.hasSavedState = true
         }
 
-        // Initialize active effects stacking order
-        var savedStack = [];
-        try {
-            var raw = (root.configuration && root.configuration.EffectsStackJson) ? root.configuration.EffectsStackJson : layoutSettings.effectsStackJson;
-            savedStack = JSON.parse(raw || "[]");
-        } catch(e) {}
-        if (Array.isArray(savedStack) && savedStack.length > 0) {
-            root.activeEffectsStack = savedStack;
+        // ── One-time migration from the old split-store model ──────────────
+        // Before this fix, base style came from local Settings while the effect
+        // stack came from KConfig. Preserve that effective state once, then make
+        // KConfig the single source of truth for both.
+        if (!root.configuration.StyleMigrated) {
+            // The old renderer always read the local style, so a non-default
+            // local value is the state the user actually saw. KConfig may hold
+            // a different (ignored) value; local must win exactly once.
+            // A local value of 0 is treated as "unset" so an explicit KConfig
+            // choice is not clobbered by the default.
+            if (layoutSettings.panelStyle !== 0) {
+                root.configuration.PanelStyle = layoutSettings.panelStyle;
+            }
+
+            var migratedStack = [];
+            try {
+                var cfgRaw = (root.configuration && root.configuration.EffectsStackJson)
+                        ? root.configuration.EffectsStackJson : "[]";
+                var cfgStack = JSON.parse(cfgRaw || "[]");
+                if (Array.isArray(cfgStack) && cfgStack.length > 0) {
+                    migratedStack = cfgStack;
+                }
+            } catch(e) {}
+            if (migratedStack.length === 0) {
+                migratedStack = root.stackFromConfigBooleans();
+            }
+            if (migratedStack.length === 0) {
+                try {
+                    var localStack = JSON.parse(layoutSettings.effectsStackJson || "[]");
+                    if (Array.isArray(localStack) && localStack.length > 0) {
+                        migratedStack = localStack;
+                    }
+                } catch(e) {}
+            }
+            if (migratedStack.length === 0) {
+                migratedStack = root.stackFromLocalBooleans();
+            }
+
+            root.activeEffectsStack = migratedStack;
+            // Normalize KConfig first; only then record that migration is done.
+            root.syncEffectsToConfig();
+            if (root.configuration.StyleMigrated !== undefined) {
+                root.configuration.StyleMigrated = true;
+            }
+            if (typeof root.configuration.writeConfig === "function") {
+                root.configuration.writeConfig();
+            }
         } else {
-            var init = [];
-            if (layoutSettings.effectPrismBlur) init.push("prism_blur");
-            if (layoutSettings.effectHologram) init.push("hologram");
-            if (layoutSettings.effectVignette) init.push("vignette");
-            if (layoutSettings.effectCircuit) init.push("circuit");
-            if (layoutSettings.effectScanlines) init.push("scanlines");
-            if (layoutSettings.effectAscii) init.push("ascii");
-            if (layoutSettings.effectLidarSobel) init.push("lidar_sobel");
-            if (layoutSettings.effectThermalFlir) init.push("thermal_flir");
-            if (layoutSettings.effectHalftone) init.push("halftone");
-            if (layoutSettings.effectDuotone) init.push("duotone");
-            if (layoutSettings.effectDitherFrost) init.push("dither_frost");
-            root.activeEffectsStack = init;
+            // Normal startup: KConfig is authoritative for style and effects.
+            var savedStack = [];
+            try {
+                var raw = (root.configuration && root.configuration.EffectsStackJson)
+                        ? root.configuration.EffectsStackJson : "[]";
+                var parsed = JSON.parse(raw || "[]");
+                if (Array.isArray(parsed)) {
+                    savedStack = parsed;
+                }
+            } catch(e) {}
+            if (savedStack.length === 0) {
+                savedStack = root.stackFromConfigBooleans();
+            }
+            root.activeEffectsStack = savedStack;
+            root.syncEffectsToConfig();
         }
+        root.effectsReady = true;
     }
 
     Rectangle {
@@ -763,13 +899,13 @@ WallpaperItem {
                                         spacing: 8
                                         Rectangle {
                                             width: 8; height: 8; radius: 4
-                                            color: layoutSettings.panelStyle === si.styleIndex ? root.highlightColor : "transparent"
-                                            border.color: layoutSettings.panelStyle === si.styleIndex ? root.highlightColor : Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.4)
+                                            color: root.panelStyle === si.styleIndex ? root.highlightColor : "transparent"
+                                            border.color: root.panelStyle === si.styleIndex ? root.highlightColor : Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.4)
                                             border.width: 1
                                         }
                                         Text {
                                             text: si.styleName
-                                            color: si.highlighted ? root.highlightColor : (layoutSettings.panelStyle === si.styleIndex ? root.highlightColor : root.accentColor)
+                                            color: si.highlighted ? root.highlightColor : (root.panelStyle === si.styleIndex ? root.highlightColor : root.accentColor)
                                             font.family: (typeof root !== "undefined" ? root.globalFontFamily : "monospace")
                                             font.pixelSize: Math.round(10 * (typeof root !== "undefined" ? root.globalFontScale : 1.0))
                                             font.bold: true
@@ -779,7 +915,7 @@ WallpaperItem {
                                         color: si.highlighted ? Qt.rgba(root.highlightColor.r, root.highlightColor.g, root.highlightColor.b, 0.1) : "transparent"
                                     }
                                     onTriggered: {
-                                        layoutSettings.panelStyle = si.styleIndex;
+                                        root.setPanelStyle(si.styleIndex);
                                     }
                                 }
 
@@ -1162,8 +1298,11 @@ WallpaperItem {
                                 if (layoutSettings.bgImageOverride !== "")
                                     root.configuration.BackgroundImage = layoutSettings.bgImageOverride
 
-                                // Panel style
-                                root.configuration.PanelStyle = layoutSettings.panelStyle
+                                // Panel style and effect stack are already written
+                                // through to KConfig by setPanelStyle()/syncEffectsToConfig().
+                                // Re-assert them here so SAVE_CONFIG is always a full flush.
+                                root.setPanelStyle(root.panelStyle)
+                                root.syncEffectsToConfig()
 
                                 // Font overrides
                                 if (layoutSettings.fontFamilyOverride !== "")
@@ -1196,6 +1335,11 @@ WallpaperItem {
                                 panelsVisibilitySettings.showTodoPanel = layoutSettings.showTodoPanel
                                 panelsVisibilitySettings.showGitGridPanel = layoutSettings.showGitGridPanel
                                 panelsVisibilitySettings.hasSavedState = true
+
+                                // Flush every KConfig write above to disk.
+                                if (typeof root.configuration.writeConfig === "function") {
+                                    root.configuration.writeConfig()
+                                }
 
                                 // Flash confirmation
                                 saveConfirmText.text = "✓ SAVED"
