@@ -69,6 +69,8 @@ WallpaperItem {
         return idx >= 0 ? (idx + 1) : 0;
     }
 
+    readonly property int maxEffectLayers: 10
+
     function allEffectKeys() {
         return [
             "prism_blur", "hologram", "vignette", "circuit", "scanlines",
@@ -86,6 +88,7 @@ WallpaperItem {
             var key = stack[i];
             if (keys.indexOf(key) >= 0 && out.indexOf(key) < 0) {
                 out.push(key);
+                if (out.length >= maxEffectLayers) break;
             }
         }
         return out;
@@ -146,7 +149,7 @@ WallpaperItem {
             }
         }
         if (!found) {
-            copy.push(key);
+            if (copy.length < maxEffectLayers) copy.push(key);
         }
         activeEffectsStack = copy;
         syncEffectsToConfig();
@@ -165,7 +168,7 @@ WallpaperItem {
             }
         }
         if (active && !found) {
-            copy.push(key);
+            if (copy.length < maxEffectLayers) copy.push(key);
         }
         activeEffectsStack = copy;
         // Persist the new order and normalize every KConfig flag so the

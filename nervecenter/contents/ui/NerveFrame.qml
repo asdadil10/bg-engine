@@ -5,6 +5,8 @@
 import QtQuick
 import Qt5Compat.GraphicalEffects
 
+pragma ComponentBehavior: Bound
+
 Rectangle {
     id: frame
     
@@ -16,18 +18,6 @@ Rectangle {
         return (typeof root !== "undefined" && root.configuration
                 && root.configuration[configKey] === true)
     }
-
-    // Stackable effect flags (fallback only; visibility is driven by activeEffectsStack)
-    readonly property bool showPrismBlur:   frame.configEffectEnabled("EffectPrismBlur")
-    readonly property bool showHologram:    frame.configEffectEnabled("EffectHologram")
-    readonly property bool showVignette:    frame.configEffectEnabled("EffectVignette")
-    readonly property bool showCircuit:     frame.configEffectEnabled("EffectCircuit")
-    readonly property bool showScanlines:   frame.configEffectEnabled("EffectScanlines")
-    readonly property bool showAscii:       frame.configEffectEnabled("EffectAscii")
-    readonly property bool showLidarSobel:  frame.configEffectEnabled("EffectLidarSobel")
-    readonly property bool showThermalFlir: frame.configEffectEnabled("EffectThermalFlir")
-    readonly property bool showDuotone:     frame.configEffectEnabled("EffectDuotone")
-    readonly property bool showDitherFrost: frame.configEffectEnabled("EffectDitherFrost")
 
     // Dynamic chronological overlay order (painted in the exact order the user
     // enables them; each effect samples the original wallpaper, not the
@@ -45,6 +35,91 @@ Rectangle {
             return root.activeEffectsStack.indexOf(key) >= 0;
         }
         return fallbackBool;
+    }
+
+    // Single ordered effect model. Every backdrop overlay — shader-backed or
+    // Canvas-drawn — is declared here once. Adding an effect means adding one
+    // entry (plus its shader or component), not another hand-written block
+    // with its own visibility/z/refresh plumbing.
+    readonly property var effectModel: [
+        { key: "prism_blur",  configKey: "EffectPrismBlur",  fallbackZ: 1,
+          shader: "shaders/prism_blur.frag.qsb", margins: 0,
+          p0: Qt.vector4d(18.0, 4.5, 0.0, 0.0), needsBackground: true },
+        { key: "hologram",    configKey: "EffectHologram",   fallbackZ: 2,
+          component: hologramEffectComponent, needsBackground: false },
+        { key: "vignette",    configKey: "EffectVignette",   fallbackZ: 3,
+          component: vignetteEffectComponent, needsBackground: false },
+        { key: "circuit",     configKey: "EffectCircuit",    fallbackZ: 4,
+          component: circuitEffectComponent, needsBackground: false },
+        { key: "scanlines",   configKey: "EffectScanlines",  fallbackZ: 5,
+          component: scanlinesEffectComponent, needsBackground: false },
+        { key: "ascii",       configKey: "EffectAscii",      fallbackZ: 6,
+          shader: "shaders/ascii.frag.qsb", margins: 1,
+          p0: Qt.vector4d(8.0, 12.0, 0.0, 0.0), colorMode: "ascii",
+          extraTexture: asciiAtlasImage, needsBackground: true },
+        { key: "lidar_sobel", configKey: "EffectLidarSobel", fallbackZ: 7,
+          shader: "shaders/lidar_sobel.frag.qsb", margins: 1,
+          p0: Qt.vector4d(1.5, 0.18, 1.0, 0.5), needsBackground: true },
+        { key: "thermal_flir", configKey: "EffectThermalFlir", fallbackZ: 8,
+          shader: "shaders/thermal_flir.frag.qsb", margins: 1,
+          p0: Qt.vector4d(1.0, 0.0, 0.0, 0.0),
+          extraTexture: flirLutImage, needsBackground: true },
+        { key: "duotone",     configKey: "EffectDuotone",    fallbackZ: 10,
+          shader: "shaders/duotone.frag.qsb", margins: 1,
+          p0: Qt.vector4d(1.0, 0.0, 0.0, 0.0), colorMode: "duotone",
+          opacity: 0.65, needsBackground: true },
+        { key: "dither_frost", configKey: "EffectDitherFrost", fallbackZ: 11,
+          shader: "shaders/dither_frost.frag.qsb", margins: 1,
+          p0: Qt.vector4d(8.0, 0.4, 0.0, 0.0), opacity: 0.85,
+          needsBackground: true, occludesBelow: true }
+    ]
+
+    readonly property var shaderEffectModel: effectModel.filter(function(e) {
+        return e.shader !== undefined
+    })
+    readonly property var staticEffectModel: effectModel.filter(function(e) {
+        return e.component !== undefined
+    })
+
+    readonly property bool backgroundReady: (typeof root !== "undefined"
+            && root.wallpaperImageItem && root.wallpaperImageItem.status === Image.Ready)
+
+    function effectDescriptor(key) {
+        for (var i = 0; i < effectModel.length; i++) {
+            if (effectModel[i].key === key) return effectModel[i]
+        }
+        return null
+    }
+
+    // A nearly opaque full-panel layer makes everything below it invisible in
+    // practice, so those lower layers are skipped instead of running another
+    // full-panel shader pass.
+    function effectOccludesBelow(key) {
+        var d = effectDescriptor(key)
+        return d ? d.occludesBelow === true : false
+    }
+
+    function isEffectOccluded(key) {
+        // Only full-panel shader layers are worth culling. The Canvas/vector
+        // overlays are cheap and may still contribute edge detail through a
+        // nearly opaque layer, so they stay visible.
+        var d = effectDescriptor(key)
+        if (!d || d.shader === undefined) return false
+        var stack = (typeof root !== "undefined" && root.activeEffectsStack)
+                    ? root.activeEffectsStack : []
+        var idx = stack.indexOf(key)
+        if (idx < 0) return false
+        for (var i = idx + 1; i < stack.length; i++) {
+            if (effectOccludesBelow(stack[i])) return true
+        }
+        return false
+    }
+
+    function effectLayerVisible(key, configKey, needsBackground) {
+        if (!isEffectVisible(key, configEffectEnabled(configKey))) return false
+        if (needsBackground && !backgroundReady) return false
+        if (isEffectOccluded(key)) return false
+        return true
     }
 
     // Dynamic styling based on selected Panel Backdrop Style (base styles 0-6)
@@ -90,12 +165,13 @@ Rectangle {
     property color highlightColor: "#ff007f"
     property string subLabel: ""
 
-    // ── Backdrop blur (Style 1 or when prism_blur is active) ──
+    // ── Style 1 glass blur fallback (prism_blur replaces it when active) ──
     Item {
         id: blurContainer
         anchors.fill: parent
-        visible: (frame.activePanelStyle === 1 || frame.isEffectVisible("prism_blur", frame.showPrismBlur)) &&
-                 typeof root !== "undefined" && root.wallpaperImageItem && root.wallpaperImageItem.status === Image.Ready
+        visible: frame.activePanelStyle === 1
+                 && !frame.isEffectVisible("prism_blur", frame.configEffectEnabled("EffectPrismBlur"))
+                 && frame.backgroundReady
         clip: true
         z: frame.getEffectZ("prism_blur", 1)
 
@@ -125,28 +201,6 @@ Rectangle {
             anchors.fill: parent
             source: blurSource
             radius: 48
-            visible: !frame.isEffectVisible("prism_blur", frame.showPrismBlur)
-        }
-
-        // Chromatic dispersion optical prism blur when prism_blur is active
-        ShaderEffect {
-            id: prismBlurEffect
-            anchors.fill: parent
-            visible: frame.isEffectVisible("prism_blur", frame.showPrismBlur)
-            supportsAtlasTextures: true
-
-            property var source: blurSource
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(18.0, 4.5, 0.0, 0.0) // blurRadius, dispersion
-            property vector4d p1: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property vector4d p2: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property vector4d p3: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property color c0: frame.accentColor
-            property color c1: frame.highlightColor
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-
-            fragmentShader: "shaders/prism_blur.frag.qsb"
         }
 
         // Refresh blur on coordinate or stack changes
@@ -263,6 +317,7 @@ Rectangle {
 
     // ── Cybernetic corners (Style 0: Cyberpunk Wireframe) ──
     Canvas {
+        id: cyberWireframeCanvas
         anchors.fill: parent
         visible: frame.activePanelStyle === 0
         z: 9999
@@ -317,6 +372,11 @@ Rectangle {
         onHeightChanged: requestPaint()
     }
 
+    Connections {
+        target: frame
+        function onHighlightColorChanged() { cyberWireframeCanvas.requestPaint() }
+    }
+
     // ── Side crosshairs (Style 0 only) ──
     Rectangle {
         anchors.left: parent.left
@@ -338,14 +398,13 @@ Rectangle {
     // ═══════════════════════════════════════════════════════════
     //  MICRO-STYLE: HOLOGRAM EDGES (Static Neon Gradient Borders)
     // ═══════════════════════════════════════════════════════════
-    Item {
-        anchors.fill: parent
-        visible: frame.isEffectVisible("hologram", frame.showHologram)
-        clip: true
-        z: frame.getEffectZ("hologram", 2)
+    Component {
+        id: hologramEffectComponent
+        Item {
+            anchors.fill: parent
+            clip: true
 
-
-        // ── Top edge neon line ──
+            // ── Top edge neon line ──
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -402,18 +461,19 @@ Rectangle {
                 GradientStop { position: 1.0; color: "transparent" }
             }
         }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
     //  MICRO-STYLE: VIGNETTE DEPTH (Static Dark Shadow Gradients)
     // ═══════════════════════════════════════════════════════════
-    Item {
-        anchors.fill: parent
-        visible: frame.isEffectVisible("vignette", frame.showVignette)
-        clip: true
-        z: frame.getEffectZ("vignette", 3)
+    Component {
+        id: vignetteEffectComponent
+        Item {
+            anchors.fill: parent
+            clip: true
 
-        // ── Top vignette ──
+            // ── Top vignette ──
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -479,16 +539,20 @@ Rectangle {
             border.color: Qt.rgba(accentColor.r, accentColor.g, accentColor.b, 0.06)
             border.width: 1
         }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
     //  MICRO-STYLE: CIRCUIT BOARD  (GPU-light: Canvas drawn once)
     // ═══════════════════════════════════════════════════════════
-    Canvas {
-        id: circuitCanvas
-        anchors.fill: parent
-        visible: frame.isEffectVisible("circuit", frame.showCircuit)
-        z: frame.getEffectZ("circuit", 4)
+    Component {
+        id: circuitEffectComponent
+        Item {
+            anchors.fill: parent
+
+            Canvas {
+                id: circuitCanvas
+                anchors.fill: parent
 
         property color traceColor: accentColor
 
@@ -576,11 +640,10 @@ Rectangle {
         onTraceColorChanged: requestPaint()
     }
 
-    // ── Circuit board edge markers ──
+    // ── Circuit board edge markers (sub-layer of the circuit effect) ──
     Item {
         anchors.fill: parent
-        visible: frame.isEffectVisible("circuit", frame.showCircuit)
-        z: frame.getEffectZ("circuit", 4) + 1
+        z: 1
 
         // Top-left corner bracket
         Rectangle { x: 0; y: 0; width: 12; height: 1; color: accentColor; opacity: 0.3 }
@@ -598,6 +661,8 @@ Rectangle {
         Rectangle { x: parent.width - 12; y: parent.height - 1; width: 12; height: 1; color: accentColor; opacity: 0.3 }
         Rectangle { x: parent.width - 1; y: parent.height - 12; width: 1; height: 12; color: accentColor; opacity: 0.3 }
     }
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  BASE STYLE 3 — TACTICAL CHASSIS (Chamfers, Rivets & Hazard)
@@ -608,6 +673,7 @@ Rectangle {
         z: 9998
 
         Canvas {
+            id: tacticalChassisCanvas
             anchors.fill: parent
             onPaint: {
                 var ctx = getContext("2d");
@@ -635,6 +701,17 @@ Rectangle {
             }
             onWidthChanged: requestPaint()
             onHeightChanged: requestPaint()
+        }
+
+        Connections {
+            target: frame
+            function onAccentColorChanged() { tacticalChassisCanvas.requestPaint() }
+        }
+
+        Connections {
+            target: (typeof root !== "undefined") ? root : null
+            ignoreUnknownSignals: true
+            function onBgColorChanged() { tacticalChassisCanvas.requestPaint() }
         }
 
         // Corner Bolt Rivets
@@ -759,24 +836,25 @@ Rectangle {
     // ═══════════════════════════════════════════════════════════
     //  MICRO-STYLE: INTERLACE SCANLINES (Static CRT Raster)
     // ═══════════════════════════════════════════════════════════
-    Canvas {
-        id: scanlinesCanvas
-        anchors.fill: parent
-        visible: frame.isEffectVisible("scanlines", frame.showScanlines)
-        z: frame.getEffectZ("scanlines", 5)
+    Component {
+        id: scanlinesEffectComponent
+        Canvas {
+            id: scanlinesCanvas
+            anchors.fill: parent
 
-        onPaint: {
-            var ctx = getContext("2d");
-            ctx.clearRect(0, 0, width, height);
-            if (width < 4 || height < 4) return;
-            ctx.fillStyle = Qt.rgba(0, 0, 0, 0.24);
-            for (var y = 0; y < height; y += 3) {
-                ctx.fillRect(0, y, width, 1);
+            onPaint: {
+                var ctx = getContext("2d");
+                ctx.clearRect(0, 0, width, height);
+                if (width < 4 || height < 4) return;
+                ctx.fillStyle = Qt.rgba(0, 0, 0, 0.24);
+                for (var y = 0; y < height; y += 3) {
+                    ctx.fillRect(0, y, width, 1);
+                }
             }
-        }
 
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+        }
     }
 
     // Hidden atlas image referenced as texture by the ASCII shader
@@ -786,89 +864,6 @@ Rectangle {
         visible: false
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: ASCII MATRIX SHADER (Zero-GPU: live: false)
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: asciiContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("ascii", frame.showAscii)
-        clip: true
-        z: frame.getEffectZ("ascii", 6)
-
-        ShaderEffectSource {
-            id: asciiSourceTexture
-            anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
-            }
-            live: false
-            hideSource: false
-            smooth: false
-        }
-
-        ShaderEffect {
-            id: asciiShaderEffect
-            anchors.fill: parent
-            supportsAtlasTextures: true
-
-            property var source: asciiSourceTexture
-            property var asciiAtlas: asciiAtlasImage
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(8.0, 12.0, 0.0, 0.0) // char width, char height
-            property vector4d p1: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property vector4d p2: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property vector4d p3: Qt.vector4d(0.0, 0.0, 0.0, 0.0)
-            property color c0: Qt.rgba(frame.accentColor.r, frame.accentColor.g, frame.accentColor.b, 0.65)
-            property color c1: Qt.rgba(frame.highlightColor.r, frame.highlightColor.g, frame.highlightColor.b, 0.95)
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-
-            fragmentShader: "shaders/ascii.frag.qsb"
-        }
-
-        onVisibleChanged: {
-            if (visible) {
-                asciiSourceTexture.scheduleUpdate();
-            }
-        }
-
-        Connections {
-            target: frame
-            function onWidthChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onBgImageChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-            function onActiveEffectsStackChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (asciiContainer.visible) asciiSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: {
-            if (asciiContainer.visible) {
-                asciiSourceTexture.scheduleUpdate();
-            }
-        }
-    }
-
     // 256x1 Ironbow texture LUT for FLIR
     Image {
         id: flirLutImage
@@ -876,286 +871,46 @@ Rectangle {
         visible: false
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: LIDAR SOBEL WIREFRAME CONTOURS
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: lidarContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("lidar_sobel", frame.showLidarSobel)
-        clip: true
-        z: frame.getEffectZ("lidar_sobel", 7)
 
-        ShaderEffectSource {
-            id: lidarSourceTexture
+    // ═══════════════════════════════════════════════════════════
+    //  ORDERED BACKDROP OVERLAYS
+    //  Shader effects share EffectShaderLayer; Canvas/vector effects
+    //  are loaded from the single effect model declared above.
+    // ═══════════════════════════════════════════════════════════
+    Repeater {
+        model: frame.shaderEffectModel
+        delegate: Item {
+            id: shaderEffectWrapper
+            required property var modelData
             anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
+            visible: frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
+            z: frame.getEffectZ(modelData.key, modelData.fallbackZ)
+
+            EffectShaderLayer {
+                anchors.fill: parent
+                visible: shaderEffectWrapper.visible
+                host: frame
+                shaderFile: modelData.shader
+                sourceMargins: modelData.margins !== undefined ? modelData.margins : 1
+                effectOpacity: modelData.opacity !== undefined ? modelData.opacity : 1.0
+                p0: modelData.p0
+                colorMode: modelData.colorMode !== undefined ? modelData.colorMode : "default"
+                extraTexture: modelData.extraTexture !== undefined ? modelData.extraTexture : null
+                accentColor: frame.accentColor
+                highlightColor: frame.highlightColor
             }
-            live: false
-            hideSource: false
-            smooth: false
         }
-
-        ShaderEffect {
-            anchors.fill: parent
-            supportsAtlasTextures: true
-            property var source: lidarSourceTexture
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(1.5, 0.18, 1.0, 0.5) // preBlur, threshold, thickness, bgDarken
-            property vector4d p1: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p2: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p3: Qt.vector4d(0, 0, 0, 0)
-            property color c0: frame.accentColor
-            property color c1: frame.highlightColor
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-            fragmentShader: "shaders/lidar_sobel.frag.qsb"
-        }
-
-        onVisibleChanged: { if (visible) lidarSourceTexture.scheduleUpdate(); }
-        Connections {
-            target: frame
-            function onWidthChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onActiveEffectsStackChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-            function onBgImageChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: { if (lidarContainer.visible) lidarSourceTexture.scheduleUpdate(); }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: THERMAL FLIR RECONNAISSANCE
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: flirContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("thermal_flir", frame.showThermalFlir)
-        clip: true
-        z: frame.getEffectZ("thermal_flir", 8)
-
-        ShaderEffectSource {
-            id: flirSourceTexture
+    Repeater {
+        model: frame.staticEffectModel
+        delegate: Loader {
+            required property var modelData
             anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
-            }
-            live: false
-            hideSource: false
-            smooth: false
+            visible: frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
+            z: frame.getEffectZ(modelData.key, modelData.fallbackZ)
+            sourceComponent: modelData.component
         }
-
-        ShaderEffect {
-            anchors.fill: parent
-            supportsAtlasTextures: true
-            property var source: flirSourceTexture
-            property var u_lutTex: flirLutImage
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(1.0, 0.0, 0, 0) // gain, invert
-            property vector4d p1: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p2: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p3: Qt.vector4d(0, 0, 0, 0)
-            property color c0: frame.accentColor
-            property color c1: frame.highlightColor
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-            fragmentShader: "shaders/thermal_flir.frag.qsb"
-        }
-
-        onVisibleChanged: { if (visible) flirSourceTexture.scheduleUpdate(); }
-        Connections {
-            target: frame
-            function onWidthChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onActiveEffectsStackChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-            function onBgImageChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: { if (flirContainer.visible) flirSourceTexture.scheduleUpdate(); }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: DUOTONE ATMOSPHERE
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: duotoneContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("duotone", frame.showDuotone)
-        clip: true
-        z: frame.getEffectZ("duotone", 10)
-
-        ShaderEffectSource {
-            id: duotoneSourceTexture
-            anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
-            }
-            live: false
-            hideSource: false
-            smooth: false
-        }
-
-        ShaderEffect {
-            anchors.fill: parent
-            supportsAtlasTextures: true
-            property var source: duotoneSourceTexture
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(1.0, 0, 0, 0)
-            property vector4d p1: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p2: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p3: Qt.vector4d(0, 0, 0, 0)
-            property color c0: frame.highlightColor
-            property color c1: frame.accentColor
-            property color c2: Qt.rgba(8/255, 9/255, 13/255, 1.0)
-            opacity: 0.65
-            fragmentShader: "shaders/duotone.frag.qsb"
-        }
-
-        onVisibleChanged: { if (visible) duotoneSourceTexture.scheduleUpdate(); }
-        Connections {
-            target: frame
-            function onWidthChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onActiveEffectsStackChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-            function onBgImageChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: { if (duotoneContainer.visible) duotoneSourceTexture.scheduleUpdate(); }
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  MICRO-STYLE: SANDBLASTED DITHER FROST
-    // ═══════════════════════════════════════════════════════════
-    Item {
-        id: ditherContainer
-        anchors.fill: parent
-        anchors.margins: 1
-        visible: frame.isEffectVisible("dither_frost", frame.showDitherFrost)
-        clip: true
-        z: frame.getEffectZ("dither_frost", 11)
-
-        ShaderEffectSource {
-            id: ditherSourceTexture
-            anchors.fill: parent
-            sourceItem: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            sourceRect: {
-                if (typeof root === "undefined" || !root.wallpaperImageItem) return Qt.rect(0, 0, 0, 0);
-                var absPos = frame.mapToItem(root.wallpaperImageItem, 0, 0);
-                return Qt.rect(absPos.x, absPos.y, frame.width, frame.height);
-            }
-            live: false
-            hideSource: false
-            smooth: false
-        }
-
-        ShaderEffect {
-            anchors.fill: parent
-            supportsAtlasTextures: true
-            property var source: ditherSourceTexture
-            property vector2d u_resolution: Qt.vector2d(Math.max(1, width), Math.max(1, height))
-            property vector2d u_texelSize: Qt.vector2d(1.0 / Math.max(1, width), 1.0 / Math.max(1, height))
-            property vector4d p0: Qt.vector4d(8.0, 0.4, 0, 0)
-            property vector4d p1: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p2: Qt.vector4d(0, 0, 0, 0)
-            property vector4d p3: Qt.vector4d(0, 0, 0, 0)
-            property color c0: frame.accentColor
-            property color c1: frame.highlightColor
-            property color c2: Qt.rgba(0.04, 0.05, 0.08, 1.0)
-            opacity: 0.85
-            fragmentShader: "shaders/dither_frost.frag.qsb"
-        }
-
-        onVisibleChanged: { if (visible) ditherSourceTexture.scheduleUpdate(); }
-        Connections {
-            target: frame
-            function onWidthChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onVisibleChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: frame.parent ? frame.parent : null
-            ignoreUnknownSignals: true
-            function onXChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onYChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onWidthChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onHeightChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined") ? root : null
-            ignoreUnknownSignals: true
-            function onActiveEffectsStackChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-            function onBgImageChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-        }
-        Connections {
-            target: (typeof root !== "undefined" && root.wallpaperImageItem) ? root.wallpaperImageItem : null
-            ignoreUnknownSignals: true
-            function onStatusChanged() { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-        }
-        Component.onCompleted: { if (ditherContainer.visible) ditherSourceTexture.scheduleUpdate(); }
-    }
 }

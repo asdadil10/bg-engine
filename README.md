@@ -33,6 +33,14 @@ NerveCenter ships **ordered backdrop overlays**, not a chained compositor.
 - Every effect samples the **original wallpaper crop**. Effect N does not read
   effect N−1's output, so this is painter's-algorithm alpha blending, not a
   multi-pass render chain. An opaque overlay simply covers the one below it.
+- `live: false` freezes each effect's `ShaderEffectSource` texture, so idle
+  repaints do not re-render the source item. It does **not** make the shader
+  free: the `ShaderEffect` still runs whenever the panel repaints (clocks,
+  graphs, and other live widgets cause repaints). Treat the effect stack as a
+  small per-repaint GPU cost, not a true zero-GPU path.
+- Nearly opaque layers can hide the effects below them. When a layer marked
+  `occludesBelow` sits above another effect, the covered effect is skipped
+  instead of running a full-panel pass it cannot visibly contribute to.
 - `NerveCompositor.qml` and `NerveShaderLayer.qml` are **unused reference
   implementations** for a future chained pipeline. `shader_registry.json` is
   documentation only and is not loaded at runtime.

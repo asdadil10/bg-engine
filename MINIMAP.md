@@ -133,6 +133,7 @@ bgengine/
       - `+ DUOTONE_ATMOSPHERE`: 3-stop theme palette luminance remapping (`live: false`).
       - `+ DITHER_FROST_ACRYLIC`: 8-tap Poisson dithered frosted acrylic blur (`live: false`).
       - *(Note: Halftone Dot Screen removed; legacy Hex Composite and Technical Graticule were removed earlier.)*
+      - *(Cost note: `live: false` freezes the wallpaper sample, not the shader. Effects still draw when the panel repaints. Shader effects are hidden when no wallpaper image is ready, and effects covered by a nearly opaque `dither_frost` layer are skipped.)*
 
 ---
 

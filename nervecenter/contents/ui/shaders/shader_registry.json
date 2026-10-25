@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "max_layers": 8,
+  "max_layers": 10,
 
   "shaders": [
 
@@ -25,7 +25,8 @@
       "name": "Anamorphic Lens Streak",
       "category": "Blur & Optics",
       "tier": "global",
-      "file": "anamorphic_streak.frag.qsb",
+      "status": "reference",
+      "file": "streak_comp.frag.qsb",
       "passes": [
         { "name": "luma_threshold", "frag": "streak_thresh.frag.qsb", "downsample": 4 },
         { "name": "h_blur",         "frag": "streak_blur.frag.qsb",   "downsample": 1 },
@@ -101,23 +102,6 @@
       "params": [
         { "slot": "p0.x", "name": "Gain",        "min": 0.5, "max": 3.0, "default": 1.0 },
         { "slot": "p0.y", "name": "Invert",      "min": 0.0, "max": 1.0, "default": 0.0 }
-      ]
-    },
-
-    {
-      "id": "tiltshift",
-      "name": "Tilt-Shift Bokeh",
-      "category": "Blur & Optics",
-      "tier": "panel_local",
-      "file": "tiltshift.frag.qsb",
-      "passes": [
-        { "name": "focus_blur", "frag": "tiltshift.frag.qsb", "downsample": 1 }
-      ],
-      "params": [
-        { "slot": "p0.x", "name": "Inner Radius",  "min": 0.0,  "max": 0.8,  "default": 0.25 },
-        { "slot": "p0.y", "name": "Outer Radius",  "min": 0.1,  "max": 1.0,  "default": 0.6  },
-        { "slot": "p0.z", "name": "Max Blur",      "min": 2.0,  "max": 20.0, "default": 8.0  },
-        { "slot": "p0.w", "name": "Bright Boost",  "min": 1.0,  "max": 4.0,  "default": 1.5  }
       ]
     },
 
