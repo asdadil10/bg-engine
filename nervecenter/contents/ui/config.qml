@@ -38,6 +38,7 @@ ColumnLayout {
     property alias cfg_EffectDuotone:          effectDuotoneSwitch.checked
     property alias cfg_EffectDitherFrost:      effectDitherFrostSwitch.checked
     property alias cfg_EffectsStackJson:       effectsStackJsonField.text
+    property alias cfg_EffectChained:          effectChainSwitch.checked
     property alias cfg_GridOpacity:            gridSlider.value
     property alias cfg_FontFamily:             fontFamilyCombo.currentText
     property alias cfg_FontScale:              fontScaleSlider.value
@@ -532,6 +533,13 @@ ColumnLayout {
             Kirigami.Separator {
                 Kirigami.FormData.label: "Overlays & Micro-Styles (Static 0% GPU)"
                 Kirigami.FormData.isSection: true
+            }
+
+            QQC2.Switch {
+                id: effectChainSwitch
+                Kirigami.FormData.label: "Chained Pipeline:"
+                text: "Feed each effect's output into the next (higher GPU cost, no occlusion culling)"
+                checked: false
             }
 
             QQC2.Switch {

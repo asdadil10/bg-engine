@@ -42,6 +42,10 @@
       <label>Internal: one-time split-store style/effect migration completed</label>
       <default>false</default>
     </entry>
+    <entry name="EffectChained" type="Bool">
+      <label>Chain effects (each layer reads the previous layer's output)</label>
+      <default>false</default>
+    </entry>
     <entry name="EffectHologram" type="Bool">
       <label>Hologram edge neon borders overlay</label>
       <default>false</default>

@@ -22,7 +22,11 @@
 
 ## Rendering model
 
-NerveCenter ships **ordered backdrop overlays**, not a chained compositor.
+NerveCenter supports two rendering modes. **Independent overlays** is the
+default; **chained pipeline** is opt-in via the `EffectChained` config switch
+or `STYLE ▾` → `CHAIN SHADERS`.
+
+### Independent overlays (default)
 
 - A **base style** (0–6) paints the panel fill, radius, border, and its
   decorations. Base-style decorations are pinned above the overlays.
@@ -41,9 +45,29 @@ NerveCenter ships **ordered backdrop overlays**, not a chained compositor.
 - Nearly opaque layers can hide the effects below them. When a layer marked
   `occludesBelow` sits above another effect, the covered effect is skipped
   instead of running a full-panel pass it cannot visibly contribute to.
-- `NerveCompositor.qml` and `NerveShaderLayer.qml` are **unused reference
-  implementations** for a future chained pipeline. `shader_registry.json` is
-  documentation only and is not loaded at runtime.
+
+### Chained pipeline (`EffectChained = true`)
+
+- Active effects are rendered in activation order into **one texture chain**.
+  Stage N samples stage N−1's output, so each shader sees the previous result
+  rather than the original wallpaper.
+- Shader stages run their fragment shader against the previous texture.
+  Static Canvas/vector stages (hologram, vignette, circuit, scanlines) are
+  captured into a texture and blended into the chain with `blend.frag`, so they
+  participate in the same order as shader effects.
+- Translucent layers (duotone at 0.65, dither frost at 0.85) are blended over
+  the accumulated texture at their opacity before the next stage reads it.
+- `EffectChain.qml` / `EffectChainStage.qml` implement the live chain.
+  Intermediates are RGBA16F to limit inter-pass banding. The cost is one
+  render target per active layer (up to 10), so it is heavier than independent
+  mode; occlusion culling is disabled because every layer feeds the next.
+- If no wallpaper image is ready, or no shader effect is active, the wallpaper
+  falls back to independent overlays (shader effects hidden, static overlays
+  still drawn).
+- `NerveCompositor.qml` and `NerveShaderLayer.qml` remain **unused reference
+  implementations**; the live chain is the declarative `EffectChain`
+  implementation. `shader_registry.json` is documentation only and is not
+  loaded at runtime.
 
 ---
 

@@ -121,7 +121,7 @@ bgengine/
       - `5: RETRO_PHOSPHOR_CRT`: Vintage CRT cathode tint, phosphor glow inner bezel.
       - `6: CYBER_NEUMORPHIC`: Recessed milled-carbon look, specular highlight and deep ambient shadow.
     - **Ordered Backdrop Overlays (painted in activation order):**
-      - Painted in the exact order enabled (`EffectsStackJson` & `activeEffectsStack`, shown as `[L1]`, `[L2]`, … in the HUD Style Menu). Each overlay samples the original wallpaper crop, so this is painter's-algorithm alpha blending — **not** a chained multi-pass pipeline.
+      - Painted in the exact order enabled (`EffectsStackJson` & `activeEffectsStack`, shown as `[L1]`, `[L2]`, … in the HUD Style Menu). In the default **independent** mode each overlay samples the original wallpaper crop, so this is painter's-algorithm alpha blending — **not** a chained multi-pass pipeline.
       - `+ PRISM_FROST_BLUR`: Optical chromatic dispersion blur shader with multi-sample RGB separation (`live: false`).
       - `+ HOLOGRAM_EDGES`: Static cyan-top / magenta-bottom neon gradient borders.
       - `+ VIGNETTE_DEPTH`: Static multi-directional dark shadow gradient falls.
@@ -134,6 +134,7 @@ bgengine/
       - `+ DITHER_FROST_ACRYLIC`: 8-tap Poisson dithered frosted acrylic blur (`live: false`).
       - *(Note: Halftone Dot Screen removed; legacy Hex Composite and Technical Graticule were removed earlier.)*
       - *(Cost note: `live: false` freezes the wallpaper sample, not the shader. Effects still draw when the panel repaints. Shader effects are hidden when no wallpaper image is ready, and effects covered by a nearly opaque `dither_frost` layer are skipped.)*
+      - *(Chained mode: `EffectChained=true` switches to `EffectChain.qml` / `EffectChainStage.qml`. Each active stage reads the previous stage's RGBA16F texture; static Canvas/vector effects are captured and blended with `blend.frag`. It costs one render target per layer, disables occlusion culling, and falls back to independent overlays when no wallpaper or no shader effect is active. Toggle via the config dialog or `STYLE ▾` → `CHAIN SHADERS`.)*
 
 ---
 

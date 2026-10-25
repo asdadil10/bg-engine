@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "max_layers": 10,
+  "pipeline_modes": ["independent", "chained"],
 
   "shaders": [
 

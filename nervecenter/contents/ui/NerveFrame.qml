@@ -14,14 +14,19 @@ Rectangle {
     readonly property int activePanelStyle: (typeof root !== "undefined" && root.panelStyle !== undefined)
                                              ? root.panelStyle : 0
 
+    // Chained mode feeds each effect's output into the next effect. Independent
+    // mode (the default) samples the original wallpaper for every effect.
+    readonly property bool chainedMode: (typeof root !== "undefined"
+                                         && root.effectChained === true)
+
     function configEffectEnabled(configKey) {
         return (typeof root !== "undefined" && root.configuration
                 && root.configuration[configKey] === true)
     }
 
     // Dynamic chronological overlay order (painted in the exact order the user
-    // enables them; each effect samples the original wallpaper, not the
-    // previous effect's output)
+    // enables them). In independent mode each effect samples the original
+    // wallpaper; chained mode feeds each stage the previous stage's output.
     function getEffectZ(key, fallbackZ) {
         if (typeof root !== "undefined" && root.activeEffectsStack) {
             var idx = root.activeEffectsStack.indexOf(key);
@@ -83,6 +88,34 @@ Rectangle {
 
     readonly property bool backgroundReady: (typeof root !== "undefined"
             && root.wallpaperImageItem && root.wallpaperImageItem.status === Image.Ready)
+
+    // Chained mode consumes every active effect in activation order. Unlike the
+    // independent path, it cannot cull a layer under dither_frost: that layer is
+    // part of the input the frost shader reads.
+    readonly property var chainModel: {
+        var stack = (typeof root !== "undefined" && root.activeEffectsStack)
+                    ? root.activeEffectsStack : []
+        var out = []
+        for (var i = 0; i < stack.length; i++) {
+            var d = effectDescriptor(stack[i])
+            if (!d) continue
+            if (!isEffectVisible(d.key, configEffectEnabled(d.configKey))) continue
+            out.push(d)
+        }
+        return out
+    }
+
+    readonly property bool chainHasShader: {
+        for (var i = 0; i < chainModel.length; i++) {
+            if (chainModel[i].shader !== undefined) return true
+        }
+        return false
+    }
+
+    // A chain needs a wallpaper sample and at least one shader stage. Without
+    // either, fall back to the independent overlays (which also preserves the
+    // C9 behaviour of hiding shader effects when no image is ready).
+    readonly property bool useChain: chainedMode && backgroundReady && chainHasShader
 
     function effectDescriptor(key) {
         for (var i = 0; i < effectModel.length; i++) {
@@ -876,6 +909,7 @@ Rectangle {
     //  ORDERED BACKDROP OVERLAYS
     //  Shader effects share EffectShaderLayer; Canvas/vector effects
     //  are loaded from the single effect model declared above.
+    //  Hidden while the chained pipeline is active.
     // ═══════════════════════════════════════════════════════════
     Repeater {
         model: frame.shaderEffectModel
@@ -883,7 +917,8 @@ Rectangle {
             id: shaderEffectWrapper
             required property var modelData
             anchors.fill: parent
-            visible: frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
+            visible: !frame.useChain
+                     && frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
             z: frame.getEffectZ(modelData.key, modelData.fallbackZ)
 
             EffectShaderLayer {
@@ -907,10 +942,28 @@ Rectangle {
         delegate: Loader {
             required property var modelData
             anchors.fill: parent
-            visible: frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
+            visible: !frame.useChain
+                     && frame.effectLayerVisible(modelData.key, modelData.configKey, modelData.needsBackground)
             z: frame.getEffectZ(modelData.key, modelData.fallbackZ)
             sourceComponent: modelData.component
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  CHAINED PIPELINE (EffectChained = true)
+    //  Each stage reads the previous stage's texture; static effects
+    //  are captured and blended into the chain.
+    // ═══════════════════════════════════════════════════════════
+    EffectChain {
+        objectName: "effectChain"
+        anchors.fill: parent
+        visible: frame.useChain
+        z: 5
+        host: frame
+        model: frame.chainModel
+        wallpaperItem: (typeof root !== "undefined") ? root.wallpaperImageItem : null
+        accentColor: frame.accentColor
+        highlightColor: frame.highlightColor
     }
 
 }

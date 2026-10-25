@@ -208,4 +208,20 @@ TestCase {
         verify(cfg.cfg_EffectVignette)
         verify(cfg.cfg_EffectDuotone)
     }
+
+    // The chained-pipeline switch is independent of the effect stack and
+    // round-trips through its KConfigXT alias.
+    function test_11_chainedPipelineSwitch() {
+        verify(!cfg.cfg_EffectChained)
+        var sw = findSwitch("Feed each effect")
+        verify(sw !== null, "chained pipeline switch not found")
+        sw.checked = true
+        sw.clicked()
+        compare(cfg.cfg_EffectChained, true)
+        // Effect stack must be untouched by the mode switch.
+        compare(cfg.effectsOrder.length, 2)
+        sw.checked = false
+        sw.clicked()
+        compare(cfg.cfg_EffectChained, false)
+    }
 }

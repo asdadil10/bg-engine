@@ -55,6 +55,11 @@ WallpaperItem {
     readonly property int panelStyle: (root.configuration && root.configuration.PanelStyle !== undefined)
                                       ? root.configuration.PanelStyle : 0
 
+    // Chained mode feeds each effect's output into the next; independent mode
+    // samples the original wallpaper for every effect.
+    readonly property bool effectChained: (root.configuration
+                                           && root.configuration.EffectChained === true)
+
     // Guard against feedback loops while writing KConfig programmatically.
     property bool syncingEffects: false
     // Set once migration/startup has established the initial stack.
@@ -209,6 +214,15 @@ WallpaperItem {
     function setPanelStyle(index) {
         if (root.configuration && root.configuration.PanelStyle !== undefined) {
             root.configuration.PanelStyle = index;
+            if (typeof root.configuration.writeConfig === "function") {
+                root.configuration.writeConfig();
+            }
+        }
+    }
+
+    function setEffectChained(enabled) {
+        if (root.configuration && root.configuration.EffectChained !== undefined) {
+            root.configuration.EffectChained = enabled;
             if (typeof root.configuration.writeConfig === "function") {
                 root.configuration.writeConfig();
             }
@@ -1025,6 +1039,44 @@ WallpaperItem {
                                 EffectItem {
                                     effectName: "+ DITHER_FROST_ACRYLIC"
                                     effectKey: "dither_frost"
+                                }
+
+                                MenuSeparator {
+                                    contentItem: Rectangle {
+                                        implicitHeight: 1
+                                        color: root.accentColor
+                                        opacity: 0.15
+                                    }
+                                }
+
+                                MenuItem {
+                                    id: chainEffectsItem
+                                    contentItem: RowLayout {
+                                        spacing: 8
+                                        Rectangle {
+                                            width: 8; height: 8; radius: 1
+                                            color: root.effectChained ? root.highlightColor : "transparent"
+                                            border.color: root.effectChained ? root.highlightColor : Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.4)
+                                            border.width: 1
+                                        }
+                                        Text {
+                                            text: "CHAIN SHADERS"
+                                            color: chainEffectsItem.highlighted ? root.highlightColor : (root.effectChained ? root.highlightColor : root.accentColor)
+                                            font.family: (typeof root !== "undefined" ? root.globalFontFamily : "monospace")
+                                            font.pixelSize: Math.round(10 * (typeof root !== "undefined" ? root.globalFontScale : 1.0))
+                                            font.bold: true
+                                        }
+                                        Text {
+                                            text: root.effectChained ? "[ON]" : "[OFF]"
+                                            color: root.effectChained ? root.highlightColor : Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.4)
+                                            font.family: (typeof root !== "undefined" ? root.globalFontFamily : "monospace")
+                                            font.pixelSize: Math.round(9 * (typeof root !== "undefined" ? root.globalFontScale : 1.0))
+                                        }
+                                    }
+                                    background: Rectangle {
+                                        color: chainEffectsItem.highlighted ? Qt.rgba(root.highlightColor.r, root.highlightColor.g, root.highlightColor.b, 0.1) : "transparent"
+                                    }
+                                    onTriggered: root.setEffectChained(!root.effectChained)
                                 }
                             }
                         }

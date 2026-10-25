@@ -11,7 +11,7 @@
 - **Layering is real, but shallow.** At audit time the micro-effects were ordered by one array and assigned `z = index + 5`; they alpha-composite in activation order. They are **not a render chain** — each effect samples the original wallpaper independently. Base styles are outside the stack and pinned above it. The only true ping-pong compositor in the repo (`NerveCompositor.qml`) is **never instantiated**. C1 resolved this by documenting the shipped model as ordered backdrop overlays and relabelling the compositor as unused reference code. C2 replaced the hand-written blocks with one `effectModel` (shader effects share `EffectShaderLayer.qml`; static effects load from `Component`s), and C4 skips shader layers hidden beneath `dither_frost`.
 - **Persistence is split-brain.** Base style is effectively local-settings-authoritative; the effect stack is KConfig-authoritative. The two stores already disagree on this machine, so a reboot can produce a hybrid state that was never selected.
 
-> **Status (2026-10-25):** the P0 persistence findings below are fixed and verified. KConfig is now the single source of truth for both base style and the effect stack, after a one-time migration guarded by `StyleMigrated`. Sections 1–3 describe the **pre-fix** code and are kept as the audit record; §5 tracks each fix and its verification. The halftone effect was subsequently removed end-to-end (schema, both UIs, runtime, registry, shaders, tests), leaving **10** shipped effects; legacy `"halftone"` entries in saved stacks are filtered out on load. The C category is also complete: one ordered effect model drives all overlays, the stack is capped at 10, `dither_frost` culls covered shader layers, and shader/blur layers wait for a ready wallpaper. E6 (layer order) and E7 (CPU/GPU) are verified; E4 (multi-monitor) is deferred.
+> **Status (2026-10-25):** the P0 persistence findings below are fixed and verified. KConfig is now the single source of truth for both base style and the effect stack, after a one-time migration guarded by `StyleMigrated`. Sections 1–3 describe the **pre-fix** code and are kept as the audit record; §5 tracks each fix and its verification. The halftone effect was subsequently removed end-to-end (schema, both UIs, runtime, registry, shaders, tests), leaving **10** shipped effects; legacy `"halftone"` entries in saved stacks are filtered out on load. The C category is also complete: one ordered effect model drives all overlays, the stack is capped at 10, `dither_frost` culls covered shader layers, and shader/blur layers wait for a ready wallpaper. E6 (layer order) and E7 (CPU/GPU) are verified; E4 (multi-monitor) is deferred. An **opt-in** chained pipeline was added after the audit closed (§8); independent overlays remain the default.
 
 ---
 
@@ -308,3 +308,46 @@ Interpretation:
 - `install.sh` removes/reinstalls the package but never touches `~/.config/kde.org/plasmashell.conf` or the appletsrc group. Stale state therefore survives reinstall and must be migrated explicitly.
 - The `Settings` component uses `~/.config/kde.org/plasmashell.conf` on this machine. That file is shared by all plasmashell components using the same `QtCore.Settings` application identity, so the `Layout` category is not isolated to NerveCenter.
 - No code was changed during the initial audit pass. Fixes were then implemented in `dfc2337` (persistence), `558ce4f` (B4 cleanup), `87a379f` (C1 + halftone removal), `c7a634d` (C2–C9), and `8a2fc83` (E7 measurements). E4 remains deferred.
+
+---
+
+## 8. Post-audit: opt-in chained pipeline
+
+Added after the audit was closed. It does **not** change the default rendering model:
+independent ordered overlays stay the default, and chained mode is opt-in.
+
+### 8.1 Design
+
+- [x] New persisted `EffectChained` Bool (default `false`) in `config/main.xml`, with a `cfg_EffectChained` alias and a switch in the config dialog.
+- [x] In-canvas toggle under `STYLE ▾` → `CHAIN SHADERS`; `setEffectChained()` writes through KConfig and calls `writeConfig()`.
+- [x] `EffectChain.qml` owns the wallpaper crop and the ordered `Repeater`; `EffectChainStage.qml` renders one link.
+- [x] Stage 0 samples the wallpaper crop under the panel. Stage N reads stage N−1's output texture, so a shader sees the previous effect's result rather than the original wallpaper.
+- [x] Static Canvas/vector stages (hologram, vignette, circuit, scanlines) are loaded, captured into a texture, and composited with `blend.frag`, so they keep their position in the order.
+- [x] Translucent layers (e.g. duotone `0.65`, dither frost `0.85`) are blended over the accumulated texture at their configured opacity before the next stage reads it.
+- [x] Intermediates are `RGBA16F` to limit inter-pass banding; sources are `live: false` and refreshed explicitly with `scheduleUpdate()`.
+- [x] Occlusion culling is disabled in chained mode: a culled layer would remove input the next stage is supposed to read.
+- [x] Fallback to independent overlays when no wallpaper image is ready, or when no shader effect is active (static-only stacks still draw through the independent path).
+- [x] `EffectChain` refreshes on host/parent move and resize, accent/highlight changes, background image/opacity changes, stack changes, and wallpaper status changes.
+
+### 8.2 Cost
+
+Chained mode needs one render target per active layer (up to the 10-layer cap) and
+cannot skip covered layers. The E7 measurements in §5 were taken in independent
+mode and do not apply to chained mode; expect it to be the heavier option.
+
+### 8.3 Verification
+
+- [x] Headless chain suite: 9/9 passed (order, stage wiring, static participation, no-background fallback, no-shader fallback).
+- [x] Headless config suite: 13/13 passed, including `test_11_chainedPipelineSwitch()` (switch round-trips without touching the effect stack).
+- [x] `qmllint`: 0 errors on `EffectChain.qml`, `EffectChainStage.qml`, `NerveFrame.qml`, `main.qml`, `config.qml`.
+- [x] Live: `["prism_blur","duotone"]` in chained mode is blurred-then-remapped; in independent mode the opaque duotone covers the blur and the result is sharp. This is the direct proof that stage N reads stage N−1.
+- [x] Live ordering: `["duotone","dither_frost"]` vs `["dither_frost","duotone"]`; `["circuit","duotone","scanlines"]` chained vs independent. No QML errors in the journal across restarts.
+- [x] `EffectChained` persists across a plasmashell restart.
+- [ ] E4 (multi-monitor / activity switching) remains deferred; chained mode inherits the same single-wallpaper-crop assumption as independent mode.
+
+### 8.4 Scope note
+
+`NerveCompositor.qml` and `NerveShaderLayer.qml` remain unused reference code.
+The shipped chain is the declarative `EffectChain` implementation, not the
+reference ping-pong compositor. `shader_registry.json` remains documentation and
+is not loaded at runtime; it now lists `pipeline_modes: ["independent", "chained"]`.
