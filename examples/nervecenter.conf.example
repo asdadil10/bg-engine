@@ -1,60 +1,70 @@
-[AI]
-apiKey=
-endpoint=https://openrouter.ai/api/v1/chat/completions
-llamaPath=
-maxTokens=2048
-model=openai/gpt-4o
-systemPrompt=You are a helpful AI assistant.
-temperature=0.7
-
-[Effects]
-circuit=false
-hologram=false
-vignette=false
+# NerveCenter — local settings example
+#
+# NerveCenter keeps panel-local UI state in this file through QtCore's
+# `Settings` component (~/.config/kde.org/plasmashell.conf).
+#
+# Base style and micro-effects are NOT stored here. They live in KConfig
+# under [Containments][N][Wallpaper][org.kde.nervecenter][General], so they
+# are per containment, survive a local-settings reset, and are the single
+# source of truth after the one-time migration.
+#
+# This file is shared with other plasmashell components, so only add the
+# groups you actually need. Edit it while plasmashell is stopped.
 
 [Layout]
-leftBookmarkHeight=0.35
-leftSensorHeight=0.55
 leftWidth=350
-panelsLayoutJson="{\"mainTerminal\":{\"x\":592,\"y\":96,\"width\":768,\"height\":1072}}"
-rightControlsHeight=180
-rightNetworkHeight=220
-rightNotesHeight=0.45
 rightWidth=350
-
-[Notes]
-text=// NEURAL LINK LOGS //\n[SECURE RECORD] Enter custom logs here...
-
-[Panels]
+leftSensorHeight=0.55
+leftBookmarkHeight=0.35
+rightNotesHeight=0.45
+rightNetworkHeight=220
+rightControlsHeight=180
+panelsLayoutJson="{}"
 editMode=false
-showLeftBookmarkBar=true
+themeBgColor=
+themeAccentColor=
+themeHighlightColor=
+gridOpacity=-1
+bgImageOpacity=-1
+hudOpacity=-1
+bgImageOverride=
+fontFamilyOverride=
+fontScaleOverride=-1
+
+[PanelsVisibility]
+hasSavedState=false
+showMainTerminal=true
 showLeftMediaPanel=true
 showLeftSensorPanel=true
-showMainTerminal=true
-showRightAIPanel=false
-showRightControlsPanel=true
-showRightNetworkPanel=true
+showLeftBookmarkBar=true
 showRightNotesPanel=true
+showRightNetworkPanel=true
+showRightControlsPanel=true
+showTodoPanel=false
+showGitGridPanel=false
 
-[Presets]
-customPresetsJson=[]
-fetchedModelsJson=[]
+[DeckWeather]
+cachedJson=
 
-[Shortcuts]
-iconPadding=16
-iconSize=16
-shortcutsJson=[]
+[MediaPanel]
+showVisualizer=false
 
-[Style]
-fontFamily=monospace
-fontScale=0.8
-panelStyle=0
+[Notes]
+text=
 
-[Theme]
-accentColor=#00f0ff
-bgColor=#08090d
-bgImage=
-bgImageOpacity=0.15
-gridOpacity=0
-highlightColor=#ff007f
-hudOpacity=0.1
+[Directives]
+tasksJson=[]
+
+[Launchpad]
+selectedIconPack=
+
+[GitGrid]
+repoPath=
+customRepoPath=
+username=
+cachedJson=
+cachedTotal=0
+
+[QuoteOfDay]
+quoteIndex=0
+lastDate=

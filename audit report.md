@@ -186,7 +186,7 @@ Interpretation:
 - **Effect stack:** KConfig says `["prism_blur","lidar_sobel"]`; local says `["lidar_sobel"]`. Startup uses KConfig, so the stack after restart is prism + LiDAR, not LiDAR only.
 - **Boolean/stack contradiction:** KConfig has `EffectHologram=true` but hologram is absent from `EffectsStackJson`, so hologram will not render. The per-effect booleans and the stack JSON are already out of sync.
 - **Opacity:** local `hudOpacity=1` shadows KConfig `HudOpacity=0.7`, so the KConfig value is ignored.
-- **Legacy keys:** local still contains `effectGraticule`, `effectHex`, `showRightAIPanel`, `[Presets]`, `[QuoteOfDay]` — stale schema from earlier versions. `install.sh` does not touch config, so these survive reinstalls.
+- **Legacy keys:** local still contains `effectGraticule`, `effectHex`, `showRightAIPanel`, and `[Presets]` — stale schema from earlier versions. `install.sh` does not touch config, so these survive reinstalls. (`[QuoteOfDay]` is current, not legacy.)
 
 ### 3.5 What survives a reboot
 
@@ -244,7 +244,7 @@ Interpretation:
 - [x] **B1. Add the missing effect aliases to `config.qml`.** All 11 `cfg_Effect*` aliases now exist.
 - [x] **B2. Add `cfg_EffectsStackJson` or replace the 11 switches with one ordered list editor.** A hidden `effectsStackJsonField` is bound to `cfg_EffectsStackJson`; toggling a switch preserves activation order (new effects append, disabled effects are removed).
 - [x] **B3. Remove redundant per-effect booleans if the stack JSON is the source of truth**, or write both consistently. Both are written together by `syncEffectsToConfig()`, so `EffectHologram=true` can no longer coexist with a stack that excludes `hologram`.
-- [ ] **B4. Migrate and remove legacy local keys** (`effectHex`, `effectGraticule`, `showRightAIPanel`, `[Presets]`, `[QuoteOfDay]`). Acceptance: local settings contain only the current schema. *(Deferred: stale keys are ignored but not deleted.)*
+- [x] **B4. Migrate and remove legacy local keys** (`effectHex`, `effectGraticule`, `showRightAIPanel`, `[Presets]`, `[QuoteOfDay]`). Acceptance: local settings contain only the current schema. *(`[QuoteOfDay]` is current, not legacy — `main.qml` reads it for the daily quote. The three orphaned `[Layout]` keys and the `[Presets]` group were removed by `scripts/cleanup-legacy-settings.py`, which edits the shared file as text instead of re-serializing it through KConfig tools. The script runs from `install.sh` and is idempotent. The `panelStyle`/`effect*`/`effectsStackJson` mirrors are deliberately retained: the one-time migration still reads them for users upgrading from older versions.)*
 - [x] **B5. Update `main.xml` labels/defaults** if the schema changes, and keep `config.qml` aliases in lockstep. The schema already contained all 11 effects and `EffectsStackJson`; aliases are now in lockstep.
 
 > **Implementation note:** On first run after this patch, `main.qml` runs a one-time migration guarded by the per-containment KConfig `StyleMigrated` flag (`config/main.xml`). It preserves the previously effective state (local base style + KConfig effect stack), writes the normalized result to KConfig, then ignores the local mirrors. This is the only point where local style/effect values are read.
@@ -283,6 +283,8 @@ Interpretation:
 > **Live migration verification (2026-10-25):** before the patch, local `PanelStyle=3` and KConfig `PanelStyle=1`; KConfig stack was `["prism_blur","lidar_sobel"]` with `EffectHologram=true`. After the first reload, the live KConfig became `PanelStyle=3`, `StyleMigrated=true`, stack `["prism_blur","lidar_sobel"]`, `EffectHologram=false`, `EffectPrismBlur=true`, `EffectLidarSobel=true`. `root.configuration.writeConfig()` flushed the same values to `plasma-org.kde.plasma.desktop-appletsrc`. A second full shell restart returned the identical state, confirming the migration is one-time and stable.
 >
 > **Repair verification (2026-10-25):** with the shell stopped, `EffectHologram=true` was injected while `EffectsStackJson` excluded `hologram`. On the next start the boolean was normalized to `false` and dropped from disk, so the stack and the booleans cannot disagree.
+>
+> **Local-settings cleanup (2026-10-25):** `scripts/cleanup-legacy-settings.py` removed `effectHex`, `effectGraticule`, `showRightAIPanel`, and the `[Presets]` group. A byte-level diff showed no other changes; the keys did not reappear after a full shell restart; every current group (`[DeckWeather]`, `[GitGrid]`, `[QuoteOfDay]`, …) was untouched. A backup is kept as `plasmashell.conf.nervecenter-bak`.
 
 ---
 

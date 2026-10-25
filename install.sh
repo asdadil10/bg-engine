@@ -31,6 +31,14 @@ fi
 kpackagetool6 --type Plasma/Wallpaper -i "$PLUGIN_DIR"
 echo "  ✓ Installed $PLUGIN_ID"
 
+# Remove keys that no current code path reads (audit item B4). This edits the
+# shared plasmashell.conf as text so KConfig escaping is left untouched.
+if command -v python3 >/dev/null 2>&1; then
+    python3 "$(dirname "$0")/scripts/cleanup-legacy-settings.py"
+else
+    echo "  · python3 not found; skipping legacy settings cleanup"
+fi
+
 # Ensure legacy CAVA and PTY background service bridges are completely stopped and cleaned up
 AUTOSTART_DIR="$HOME/.config/autostart"
 rm -f "$AUTOSTART_DIR/nerve_pty.desktop" "$AUTOSTART_DIR/nerve_cava.desktop"
